@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -e
+
+adduser --system --no-create-home --group --disabled-login openhab
+
+chown -hR openhab:openhab /opt/openhab
+
+systemctl enable openhab.service

@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+corepack enable
+
+# reinstall to fix incorrect link
+yes Y | pnpm -C /opt/openhab-deps/zigbee-herdsman install --frozen-lockfile
+yes Y | pnpm -C /opt/openhab-deps/zigbee2mqtt install --frozen-lockfile
+
+systemctl enable zigbee2mqtt.service
