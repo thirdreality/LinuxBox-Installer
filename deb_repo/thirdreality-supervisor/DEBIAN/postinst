@@ -30,6 +30,44 @@ if [ "$1" = "configure" ]; then
 
 	/usr/bin/systemctl daemon-reload > /dev/null 2>&1
 
+	# Update version information in /etc/t3r-release
+	update_t3r_version() {
+		local armbian_version="05"  # Configurable version number
+		
+		if [ -f "/etc/t3r-release" ]; then
+			info "Updating /etc/t3r-release version information..."
+			
+			# Get current VERSION and extract components
+			local current_version=$(grep '^VERSION=' /etc/t3r-release | cut -d'"' -f2 | sed 's/^v//')
+			if [ -n "$current_version" ]; then
+				# Extract major.minor.patch parts (e.g., 1.03.01 from 1.03.01.04)
+				local major_minor_patch=$(echo "$current_version" | cut -d'.' -f1-3)
+				local new_version="v${major_minor_patch}.${armbian_version}"
+				
+				# Update VERSION
+				sed -i "s/^VERSION=.*/VERSION=\"${new_version}\"/" /etc/t3r-release
+				
+				# Update VERSION_ID (format: 1XXYYZZ where XX=major, YY=minor, ZZ=patch)
+				local major=$(echo "$major_minor_patch" | cut -d'.' -f1)
+				local minor=$(echo "$major_minor_patch" | cut -d'.' -f2)
+				local patch=$(echo "$major_minor_patch" | cut -d'.' -f3)
+				local new_version_id="1${minor}${patch}${armbian_version}"
+				
+				sed -i "s/^VERSION_ID=.*/VERSION_ID=\"${new_version_id}\"/" /etc/t3r-release
+				
+				info "Updated VERSION to ${new_version}"
+				info "Updated VERSION_ID to ${new_version_id}"
+			else
+				warn "Could not parse current VERSION from /etc/t3r-release"
+			fi
+		else
+			warn "/etc/t3r-release file not found, skipping version update"
+		fi
+	}
+	
+	# Call version update function
+	update_t3r_version
+
 	info "Install success."
 elif [ "$1" = "fix-dependency" ]; then
     echo "fix-dependency"

@@ -12,7 +12,7 @@ TIMEOUT=1200
 export LC_ALL DEBIAN_FRONTEND APT_LISTCHANGES_FRONTEND MACHINE
 
 WORK_DIR="/mnt/R3Install"
-EXTRA_WORK_DIR="/mnt/R3Archives"
+EXTRA_WORK_DIR="/mnt/R3Install"
 CONFIG_DIR="/var/lib/homeassistant"
 
 set -e
@@ -73,6 +73,8 @@ exclude_patterns=(
     # "os-agent"
     # "homeassistant-supervised"
 
+    "board_firmware_"
+
     "hacore-config_"
     "python3_"
     "hacore_"
@@ -87,7 +89,7 @@ exclude_patterns=(
 )
 
 install_extra_debs() {
-    echo "[EXTRA]Finding and installing normal deb packages..."
+    echo "[EXTRA]Finding and installing extra deb packages..."
 
     # Skip if directory doesn't exist
     if [ ! -d "$EXTRA_WORK_DIR" ]; then
@@ -175,20 +177,86 @@ dpkg_install() {
     fi
 }
 
-install_supervisor_debs() {
+install_board_flash_debs() {
     if [ ! -d "$WORK_DIR" ]; then
         return 0
     fi
 
-    echo "Attempting to install supervisor debs..."
+    echo "Attempting to install board firmware debs..."
 
-    # Install linux supervisor
-    supervisor_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "linuxbox-supervisor_*.deb" -type f | head -n 1)
-    if [ -n "$supervisor_deb_file" ]; then
-        install_deb_if_needed "$supervisor_deb_file" "linuxbox-supervisor"
+    # 查找 board_firmware deb 文件
+    board_firmware_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "board_firmware_*.deb" -type f | head -n 1)
+    
+    if [ -n "$board_firmware_deb_file" ]; then
+        echo "Found board firmware deb: $board_firmware_deb_file"
+        
+        # 获取 deb 的版本号
+        deb_version=$(dpkg-deb --info "${board_firmware_deb_file}" | grep Version | awk '{print $2}')
+        echo "Deb version: $deb_version"
+        
+        # 检查是否已经安装过
+        if dpkg -l | grep -q "^ii\s*thirdreality-board-firmware"; then
+            # 获取已安装的版本号
+            installed_version=$(dpkg-query -W -f='${Version}\n' "thirdreality-board-firmware" 2>/dev/null || true)
+            echo "Installed version: $installed_version"
+            
+            # 比较版本号，如果 deb 版本大于已安装版本则安装
+            if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
+                echo "Newer version available. Installing: $board_firmware_deb_file"
+                dpkg_install "$board_firmware_deb_file"
+            else
+                echo "Installed version is up-to-date. No installation needed."
+            fi
+        else
+            # 没有安装过，读取 /etc/t3r-release 中的版本信息
+            if [ -f "/etc/t3r-release" ]; then
+                # 从 /etc/t3r-release 读取版本信息
+                source "/etc/t3r-release"
+                echo "System version from /etc/t3r-release: $VERSION"
+                
+                # 解析系统版本号 (格式: v1.03.01.03)
+                # 提取 zigbee 和 thread 版本号
+                if [[ "$VERSION" =~ v([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+                    system_zigbee_version="${BASH_REMATCH[3]}"
+                    system_thread_version="${BASH_REMATCH[2]}"
+                    echo "System zigbee version: $system_zigbee_version, thread version: $system_thread_version"
+                    
+                    # 解析 deb 版本号 (格式: 1.03.01)
+                    if [[ "$deb_version" =~ ([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+                        deb_zigbee_version="${BASH_REMATCH[3]}"
+                        deb_thread_version="${BASH_REMATCH[2]}"
+                        echo "Deb zigbee version: $deb_zigbee_version, thread version: $deb_thread_version"
+                        
+                        # 检查 zigbee 或 thread 版本是否有一个大于系统版本
+                        if [ "$deb_zigbee_version" -gt "$system_zigbee_version" ] || [ "$deb_thread_version" -gt "$system_thread_version" ]; then
+                            echo "Either zigbee or thread version is newer. Installing: $board_firmware_deb_file"
+                            dpkg_install "$board_firmware_deb_file"
+                        else
+                            echo "Version check failed. Zigbee: $deb_zigbee_version > $system_zigbee_version, Thread: $deb_thread_version > $system_thread_version"
+                            echo "No installation needed."
+                        fi
+                    else
+                        echo "Failed to parse deb version format: $deb_version"
+                    fi
+                else
+                    echo "Failed to parse system version format: $VERSION"
+                fi
+            else
+                echo "Warning: /etc/t3r-release not found, cannot determine system version"
+            fi
+        fi
     else
-        echo "No linuxbox supervisor deb file found in $WORK_DIR" >&2
+        echo "No board firmware deb file found in $WORK_DIR"
     fi
+    
+    # 等待 thirdreality-firmware-upgrade.service 服务停止
+    echo "Waiting for thirdreality-firmware-upgrade.service to stop..."
+    while systemctl is-active --quiet thirdreality-firmware-upgrade.service; do
+        echo "Service is still running, waiting..."
+        sleep 2
+    done
+    echo "thirdreality-firmware-upgrade.service has stopped"
+    
     return 0
 }
 
@@ -329,81 +397,52 @@ install_zigpy_handler_debs()
     fi
 }
 
-# main procedure - 3
-install_all_deb_images() {
+install_supervisor_deb() {
     if [ ! -d "$WORK_DIR" ]; then
         return 0
     fi
 
-    echo "Installing all deb images and loading Docker images..."
-    local overall_status=0
-    local deb_installed=0  # Track if any deb was installed
+    echo "Attempting to install supervisor deb..."
 
-    # LED indication (continue on error)
-    if [ -e "/usr/local/bin/supervisor" ]; then
-        /usr/local/bin/supervisor led sys_firmware_updating  || true
-    fi
-
-    # Process .deb files
-    deb_files=$(find "$WORK_DIR" -maxdepth 1 -name "*.deb" -type f)
-    if [ -n "$deb_files" ]; then
-        for deb_file in $deb_files; do
-            echo "Installing: $deb_file"
-            if dpkg -i "$deb_file"; then
-                deb_installed=1
+    # 查找 linuxbox-supervisor deb 文件
+    supervisor_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "linuxbox-supervisor_*.deb" -type f | head -n 1)
+    
+    if [ -n "$supervisor_deb_file" ]; then
+        echo "Found supervisor deb: $supervisor_deb_file"
+        
+        # 获取 deb 的版本号
+        deb_version=$(dpkg-deb --info "${supervisor_deb_file}" | grep Version | awk '{print $2}')
+        echo "Deb version: $deb_version"
+        
+        # 检查是否已经安装过
+        if dpkg -l | grep -q "^ii\s*linuxbox-supervisor"; then
+            # 获取已安装的版本号
+            installed_version=$(dpkg-query -W -f='${Version}\n' "linuxbox-supervisor" 2>/dev/null || true)
+            echo "Installed version: $installed_version"
+            
+            # 比较版本号，如果 deb 版本大于已安装版本则安装
+            if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
+                echo "Newer version available. Installing: $supervisor_deb_file"
+                dpkg_install "$supervisor_deb_file"
+                echo "Supervisor installation completed."
             else
-                echo "Warning: Failed to install $deb_file" >&2
-                overall_status=1
+                echo "Installed version is up-to-date. No installation needed."
             fi
-        done
-
-        # Fix dependencies only if at least one package was installed
-        if [ "$deb_installed" -eq 1 ]; then
-            echo "Attempting to fix broken dependencies..."
-            if ! apt-get install -f -y; then
-                echo "Warning: Failed to fix dependencies" >&2
-                overall_status=1
-            fi
+        else
+            # 没有安装过，直接安装
+            echo "linuxbox-supervisor is not installed. Installing: $supervisor_deb_file"
+            dpkg_install "$supervisor_deb_file"
+            echo "Supervisor installation completed."
         fi
     else
-        echo "No .deb files found in $WORK_DIR"
+        echo "No linuxbox-supervisor deb file found in $WORK_DIR"
     fi
-
-    # Process .tar files for Docker
-    tar_files=$(find "$WORK_DIR" -maxdepth 1 -name "*.tar" -type f)
-    if [ -n "$tar_files" ]; then
-        for tar_file in $tar_files; do
-            echo "Processing Docker image: $tar_file"
-            
-            # Check for repositories file
-            if ! tar -tf "$tar_file" | grep -q "repositories"; then
-                echo "Warning: No 'repositories' file in $tar_file" >&2
-                overall_status=1
-                continue
-            fi
-
-            # Load Docker image
-            if ! docker load < "$tar_file"; then
-                echo "Error: Failed to load Docker image $tar_file" >&2
-                overall_status=1
-            fi
-        done
-    else
-        echo "No Docker image files found in $WORK_DIR"
-    fi
-
-    # Final LED indication (always attempt)
-    if [ -e "/usr/local/bin/supervisor" ]; then
-        /usr/local/bin/supervisor led sys_event_off  || true
-    fi
-
-    return $overall_status
+    
+    return 0
 }
 
 main_procedure()
 {
-    install_supervisor_debs
-
     if [ -e "/usr/local/bin/supervisor" ]; then
         /usr/local/bin/supervisor led sys_firmware_updating  || true
     fi
@@ -411,6 +450,13 @@ main_procedure()
     echo "System is start to install deb packages. " | wall
 
     if [ -d "$WORK_DIR" ]; then
+
+        # install supervisor
+        install_supervisor_deb
+
+        # install board firmware
+        install_board_flash_debs
+        
         # install home-assistant-core
         is_home_assistant_running=$(systemctl is-active --quiet home-assistant.service && echo "yes" || echo "no")
         hacore_config_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore-config_*.deb" -type f | head -n 1)
@@ -452,6 +498,7 @@ main_procedure()
     install_extra_debs
 
     if [ -e "/usr/local/bin/supervisor" ]; then
+        /usr/bin/sync
         /usr/local/bin/supervisor led sys_event_off || true
     fi
 

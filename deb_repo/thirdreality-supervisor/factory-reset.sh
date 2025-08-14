@@ -255,4 +255,3 @@ sleep 2
 /usr/bin/sync
 
 /usr/sbin/reboot
-

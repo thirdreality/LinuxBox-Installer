@@ -31,12 +31,12 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
     rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
-    print_info "flash_firmware_${version}.deb clear ..."
+    print_info "board_firmware_${version}.deb clear ..."
     exit 0
 fi
 
 if [[ "$REBUILD" == true ]]; then
-    print_info "flash_firmware_${version}.deb rebuilding ..."
+    print_info "board_firmware_${version}.deb rebuilding ..."
     rm -rf "${output_dir}" > /dev/null 2>&1
     mkdir -p "${output_dir}"
 
@@ -66,6 +66,9 @@ fi
 if [ -f "${current_dir}/upgrade_firmware.sh" ]; then
     cp ${current_dir}/upgrade_firmware.sh ${output_dir}/usr/lib/thirdreality/images/
     chmod +x ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
+    
+    # Replace VERSION in upgrade_firmware.sh with dynamic version
+    sed -i "s/VERSION=\"1.00.00\"/VERSION=\"${version}\"/" ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
 
     # Check if zigbee firmware exists and modify upgrade_firmware.sh accordingly
     if [ ! -f "${current_dir}/partition_images/blz_whole_img.bin" ]; then
@@ -86,11 +89,11 @@ if [ -f "${current_dir}/thirdreality-firmware-upgrade.service" ]; then
     cp ${current_dir}/thirdreality-firmware-upgrade.service ${output_dir}/etc/systemd/system/
 fi
 
-print_info "Start to build flash_firmware_${version}.deb ..."
-dpkg-deb --build ${output_dir} ${current_dir}/flash_firmware_${version}.deb
+print_info "Start to build board_firmware_${version}.deb ..."
+dpkg-deb --build ${output_dir} ${current_dir}/board_firmware_${version}.deb
 
 
-print_info "Build flash_firmware_${version}.deb finished ..."
+print_info "Build board_firmware_${version}.deb finished ..."
 
 
 

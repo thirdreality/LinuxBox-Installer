@@ -3,6 +3,49 @@
 # Define source and destination paths
 SRC="/usr/lib/thirdreality/images"
 DST="/lib/firmware/bl706"
+VERSION="1.00.00"
+
+# Function to update version in /etc/t3r-release
+update_version_info() {
+    local component=$1
+    local new_version=$2
+    
+    if [ ! -f "/etc/t3r-release" ]; then
+        echo "Warning: /etc/t3r-release file not found"
+        return 1
+    fi
+    
+    echo "Updating $component version to $new_version in /etc/t3r-release"
+    
+    # Parse current VERSION from script
+    local current_version=$(echo "$VERSION" | cut -d'.' -f1-3)
+    local zigbee_version=$(echo "$VERSION" | cut -d'.' -f2)
+    local thread_version=$(echo "$VERSION" | cut -d'.' -f3)
+    
+    # Update component version
+    if [ "$component" = "zigbee" ]; then
+        zigbee_version=$(printf "%02d" $new_version)
+    elif [ "$component" = "thread" ]; then
+        thread_version=$(printf "%02d" $new_version)
+    fi
+    
+    # Construct new version string
+    local new_version_string="1.${zigbee_version}.${thread_version}"
+    
+    # Update VERSION in /etc/t3r-release
+    sed -i "s/^VERSION=.*/VERSION=\"v${new_version_string}\"/" /etc/t3r-release
+    
+    # Update VERSION_ID (format: 1XXYYZZ where XX=zigbee, YY=thread, ZZ=armbian)
+    local armbian_version=$(echo "$VERSION" | cut -d'.' -f4)
+    if [ -z "$armbian_version" ]; then
+        armbian_version="03"  # Default armbian version
+    fi
+    local new_version_id="1${zigbee_version}${thread_version}${armbian_version}"
+    sed -i "s/^VERSION_ID=.*/VERSION_ID=\"${new_version_id}\"/" /etc/t3r-release
+    
+    echo "Updated VERSION to v${new_version_string}"
+    echo "Updated VERSION_ID to ${new_version_id}"
+}
 
 echo "Firmware upgrade script starting..."
 
@@ -61,6 +104,10 @@ flash_zigbee() {
         echo "Restarting $service after flashing..."
         systemctl start "$service"
     done
+    
+    # Update version information after successful zigbee flash
+    local zigbee_version=$(echo "$VERSION" | cut -d'.' -f2)
+    update_version_info "zigbee" "$zigbee_version"
 }
 
 # Function to flash thread firmware with service management
@@ -116,6 +163,10 @@ flash_thread() {
         echo "Restarting $service_to_manage after flashing..."
         systemctl start "$service_to_manage"
     fi
+    
+    # Update version information after successful thread flash
+    local thread_version=$(echo "$VERSION" | cut -d'.' -f3)
+    update_version_info "thread" "$thread_version"
 }
 
 if [ -e "/usr/local/bin/supervisor" ]; then
@@ -143,3 +194,7 @@ flash_thread
 if [ -e "/usr/local/bin/supervisor" ]; then
     /usr/local/bin/supervisor led off
 fi
+
+# Sync filesystem to ensure all changes are written to disk
+echo "Syncing filesystem to ensure version updates are saved..."
+sync
