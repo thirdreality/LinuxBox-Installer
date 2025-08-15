@@ -1,5 +1,5 @@
 Package: thirdreality-board-firmware
-Version: 1.04.02
+Version: 1.05.02
 Section: utils
 Priority: optional
 Architecture: arm64
