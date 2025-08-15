@@ -121,9 +121,9 @@ if [ "$1" = "configure" ]; then
 
 
 	# 这里检查U盘中是否存在备份文件:
-	local SKIP_CHANNEL_CHANGE=false
+	SKIP_CHANNEL_CHANGE=false
 	if [ -d "/mnt/R3Backup" ]; then
-		local BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
+		BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
 		if [ "$BACKUP_FILES" -gt 0 ]; then
 			echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/, skipping channel change operation"
 			SKIP_CHANNEL_CHANGE=true

@@ -190,7 +190,7 @@ flash_thread() {
 }
 
 if [ -e "/usr/local/bin/supervisor" ]; then
-    /usr/local/bin/supervisor led magenta
+    /usr/local/bin/supervisor led sys_firmware_updating  || true
 fi
 
 if [ -f "$SRC/bl706_func.sh" ]; then
