@@ -9,40 +9,60 @@ VERSION="1.00.00"
 update_version_info() {
     local component=$1
     local new_version=$2
-    
+
     if [ ! -f "/etc/t3r-release" ]; then
         echo "Warning: /etc/t3r-release file not found"
         return 1
     fi
-    
+
     echo "Updating $component version to $new_version in /etc/t3r-release"
-    
-    # Parse current VERSION from script
-    local current_version=$(echo "$VERSION" | cut -d'.' -f1-3)
-    local zigbee_version=$(echo "$VERSION" | cut -d'.' -f2)
-    local thread_version=$(echo "$VERSION" | cut -d'.' -f3)
-    
-    # Update component version
-    if [ "$component" = "zigbee" ]; then
-        zigbee_version=$(printf "%02d" $new_version)
-    elif [ "$component" = "thread" ]; then
-        thread_version=$(printf "%02d" $new_version)
+
+    # Read current version info from /etc/t3r-release (prefer 4-part if present)
+    local t3r_version_raw
+    t3r_version_raw=$(grep '^VERSION=' /etc/t3r-release | cut -d '"' -f2 | sed 's/^v//')
+    local t3r_version_id
+    t3r_version_id=$(grep '^VERSION_ID=' /etc/t3r-release | cut -d '"' -f2)
+
+    # Fallback to script VERSION if missing
+    if [ -z "$t3r_version_raw" ]; then
+        t3r_version_raw="$VERSION"
     fi
-    
-    # Construct new version string
-    local new_version_string="1.${zigbee_version}.${thread_version}"
-    
-    # Update VERSION in /etc/t3r-release
-    sed -i "s/^VERSION=.*/VERSION=\"v${new_version_string}\"/" /etc/t3r-release
-    
-    # Update VERSION_ID (format: 1XXYYZZ where XX=zigbee, YY=thread, ZZ=armbian)
-    local armbian_version=$(echo "$VERSION" | cut -d'.' -f4)
+
+    # Parse segments
+    local major zigbee_version thread_version armbian_version
+    major=$(echo "$t3r_version_raw" | awk -F. '{print $1}')
+    zigbee_version=$(echo "$t3r_version_raw" | awk -F. '{print $2}')
+    thread_version=$(echo "$t3r_version_raw" | awk -F. '{print $3}')
+    armbian_version=$(echo "$t3r_version_raw" | awk -F. '{print $4}')
+
+    # Derive armbian from VERSION_ID if not present in VERSION
+    if [ -z "$armbian_version" ] && [ -n "$t3r_version_id" ]; then
+        armbian_version=$(echo "$t3r_version_id" | sed -E 's/^1[0-9]{4}([0-9]{2})$/\1/')
+    fi
+    # Final fallback
     if [ -z "$armbian_version" ]; then
-        armbian_version="03"  # Default armbian version
+        armbian_version="03"
     fi
+
+    # Update the requested component
+    if [ "$component" = "zigbee" ]; then
+        zigbee_version=$(printf "%02d" "$new_version")
+    elif [ "$component" = "thread" ]; then
+        thread_version=$(printf "%02d" "$new_version")
+    fi
+
+    # Ensure major exists
+    if [ -z "$major" ]; then
+        major="1"
+    fi
+
+    # Build new 4-part version string and ID
+    local new_version_string="${major}.${zigbee_version}.${thread_version}.${armbian_version}"
+    sed -i "s/^VERSION=.*/VERSION=\"v${new_version_string}\"/" /etc/t3r-release
+
     local new_version_id="1${zigbee_version}${thread_version}${armbian_version}"
     sed -i "s/^VERSION_ID=.*/VERSION_ID=\"${new_version_id}\"/" /etc/t3r-release
-    
+
     echo "Updated VERSION to v${new_version_string}"
     echo "Updated VERSION_ID to ${new_version_id}"
 }

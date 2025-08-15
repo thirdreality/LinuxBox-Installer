@@ -85,9 +85,9 @@ if [ -f "${current_dir}/upgrade_firmware.sh" ]; then
 fi
 
 # Copy systemd service file
-if [ -f "${current_dir}/thirdreality-firmware-upgrade.service" ]; then
-    cp ${current_dir}/thirdreality-firmware-upgrade.service ${output_dir}/etc/systemd/system/
-fi
+# if [ -f "${current_dir}/thirdreality-firmware-upgrade.service" ]; then
+#     cp ${current_dir}/thirdreality-firmware-upgrade.service ${output_dir}/etc/systemd/system/
+# fi
 
 print_info "Start to build board_firmware_${version}.deb ..."
 dpkg-deb --build ${output_dir} ${current_dir}/board_firmware_${version}.deb

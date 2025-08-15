@@ -148,30 +148,9 @@ case "$1" in
 
     fix-dependency)
         # Main execution
-        if [ ! -d "$THIRDREALITY_ARCHIVES" ]; then
-            echo "ERROR: ThirdReality archives directory not found at $THIRDREALITY_ARCHIVES"
-            return 0
+        if [ -e "/usr/lib/thirdreality/post-fix-zigbee2mqtt.sh" ]; then
+            /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh > /dev/null || true
         fi
-
-        # Clean apt cache
-        rm -rf ${DEFAULT_APT_CACHE}/*.deb
-
-        # Copy package files to apt cache
-        echo "Copying package files to apt cache"
-        cp "$THIRDREALITY_ARCHIVES"/*.deb "$DEFAULT_APT_CACHE/" || echo "WARNING: Failed to copy some package files"
-
-        # Install packages
-        install_packages
-
-        # Clean up apt cache after installation
-        rm -rf ${DEFAULT_APT_CACHE}/*.deb
-
-        stop_services
-
-        # Configure services
-        configure_mosquitto
-        configure_zigbee2mqtt
-        disable_services        
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

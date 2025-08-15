@@ -136,7 +136,7 @@ cp ${current_dir}/deb/mosquitto/*.deb ${output_dir}/lib/thirdreality/archives/
 print_info "Backup nodejs debs ..."
 cp ${current_dir}/deb/nodejs/*.deb ${output_dir}/lib/thirdreality/archives/
 
-cp ${current_dir}/post-install-zigbee2mqtt.sh ${output_dir}/lib/thirdreality/
+cp ${current_dir}/post-fix-zigbee2mqtt.sh ${output_dir}/lib/thirdreality/
 
 print_info "Backup zigbee2mqtt ..."
 
