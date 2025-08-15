@@ -50,7 +50,7 @@ print_info "syncing DEBIAN ..."
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
 mkdir -p ${output_dir}/usr/lib/thirdreality/images
-mkdir -p ${output_dir}/etc/systemd/system
+#mkdir -p ${output_dir}/etc/systemd/system
 
 cp ${current_dir}/partition_images ${output_dir}/usr/lib/thirdreality/images/ -R
 

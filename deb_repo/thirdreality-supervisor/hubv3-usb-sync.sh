@@ -131,6 +131,21 @@ install_extra_debs() {
     return 0
 }
 
+# custom protocol to fix dependency
+execute_fix_dependency_if_needed() {
+    local package_name="$1"
+    local postinst_file="/var/lib/dpkg/info/${package_name}.postinst"
+    
+    if [ -f "$postinst_file" ]; then
+        echo "Executing fix-dependency for $package_name: fix-dependency"
+        if [ -x "$postinst_file" ]; then
+            "$postinst_file" fix-dependency || echo "Warning: postinst execution failed for $package_name"
+        else
+            echo "Warning: fix-dependency file $postinst_file is not executable"
+        fi
+    fi
+}
+
 install_deb_if_needed() {
     local deb_file="$1"
     local package_name="$2"
@@ -184,53 +199,55 @@ install_board_flash_debs() {
 
     echo "Attempting to install board firmware debs..."
 
-    # 查找 board_firmware deb 文件
+    # Find board_firmware deb file
     board_firmware_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "board_firmware_*.deb" -type f | head -n 1)
     
     if [ -n "$board_firmware_deb_file" ]; then
         echo "Found board firmware deb: $board_firmware_deb_file"
         
-        # 获取 deb 的版本号
+        # Get deb version number
         deb_version=$(dpkg-deb --info "${board_firmware_deb_file}" | grep Version | awk '{print $2}')
         echo "Deb version: $deb_version"
         
-        # 检查是否已经安装过
+        # Check if already installed
         if dpkg -l | grep -q "^ii\s*thirdreality-board-firmware"; then
-            # 获取已安装的版本号
+            # Get installed version number
             installed_version=$(dpkg-query -W -f='${Version}\n' "thirdreality-board-firmware" 2>/dev/null || true)
             echo "Installed version: $installed_version"
             
-            # 比较版本号，如果 deb 版本大于已安装版本则安装
+            # Compare version numbers, install if deb version is greater than installed version
             if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
                 echo "Newer version available. Installing: $board_firmware_deb_file"
                 dpkg_install "$board_firmware_deb_file"
+                execute_fix_dependency_if_needed "thirdreality-board-firmware"
             else
                 echo "Installed version is up-to-date. No installation needed."
             fi
         else
-            # 没有安装过，读取 /etc/t3r-release 中的版本信息
+            # Not installed before, read version information from /etc/t3r-release
             if [ -f "/etc/t3r-release" ]; then
-                # 从 /etc/t3r-release 读取版本信息
+                # Read version information from /etc/t3r-release
                 source "/etc/t3r-release"
                 echo "System version from /etc/t3r-release: $VERSION"
                 
-                # 解析系统版本号 (格式: v1.03.01.03)
-                # 提取 zigbee 和 thread 版本号
+                # Parse system version number (format: v1.03.01.03)
+                # Extract zigbee and thread version numbers
                 if [[ "$VERSION" =~ v([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
                     system_zigbee_version="${BASH_REMATCH[3]}"
                     system_thread_version="${BASH_REMATCH[2]}"
                     echo "System zigbee version: $system_zigbee_version, thread version: $system_thread_version"
                     
-                    # 解析 deb 版本号 (格式: 1.03.01)
+                    # Parse deb version number (format: 1.03.01)
                     if [[ "$deb_version" =~ ([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
                         deb_zigbee_version="${BASH_REMATCH[3]}"
                         deb_thread_version="${BASH_REMATCH[2]}"
                         echo "Deb zigbee version: $deb_zigbee_version, thread version: $deb_thread_version"
                         
-                        # 检查 zigbee 或 thread 版本是否有一个大于系统版本
+                        # Check if either zigbee or thread version is greater than system version
                         if [ "$deb_zigbee_version" -gt "$system_zigbee_version" ] || [ "$deb_thread_version" -gt "$system_thread_version" ]; then
                             echo "Either zigbee or thread version is newer. Installing: $board_firmware_deb_file"
                             dpkg_install "$board_firmware_deb_file"
+                            execute_fix_dependency_if_needed "thirdreality-board-firmware"
                         else
                             echo "Version check failed. Zigbee: $deb_zigbee_version > $system_zigbee_version, Thread: $deb_thread_version > $system_thread_version"
                             echo "No installation needed."
@@ -248,15 +265,7 @@ install_board_flash_debs() {
     else
         echo "No board firmware deb file found in $WORK_DIR"
     fi
-    
-    # 等待 thirdreality-firmware-upgrade.service 服务停止
-    echo "Waiting for thirdreality-firmware-upgrade.service to stop..."
-    while systemctl is-active --quiet thirdreality-firmware-upgrade.service; do
-        echo "Service is still running, waiting..."
-        sleep 2
-    done
-    echo "thirdreality-firmware-upgrade.service has stopped"
-    
+        
     return 0
 }
 
@@ -274,6 +283,7 @@ install_core_matter_debs() {
                 echo "Warning: Failed to install $hacore_config_deb_file" >&2
             else
                 apt-mark manual "thirdreality-hacore-config" || echo "Warning: Failed to mark hacore-config as manual" >&2
+                execute_fix_dependency_if_needed "thirdreality-hacore-config"
             fi
         else
             echo "No hacore-config deb file found in $WORK_DIR" >&2
@@ -290,15 +300,17 @@ install_core_matter_debs() {
         python3_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "python_*.deb" -type f | head -n 1)
         if [ -n "$python3_deb_file" ]; then
             install_deb_if_needed "$python3_deb_file" "thirdreality-python3"
+            execute_fix_dependency_if_needed "thirdreality-python3"
         else
             echo "No python3 deb file found in $WORK_DIR" >&2
         fi
     fi
 
-    # 安装 hacore
+    # Install hacore
     hacore_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore_*.deb" -type f | head -n 1)
     if [ -n "$hacore_deb_file" ]; then
         install_deb_if_needed "$hacore_deb_file" "thirdreality-hacore"
+        execute_fix_dependency_if_needed "thirdreality-hacore"
     else
         echo "No hacore deb file found in $WORK_DIR" >&2
     fi
@@ -307,6 +319,7 @@ install_core_matter_debs() {
     otbr_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "otbr-agent_*.deb" -type f | head -n 1)
     if [ -n "$otbr_deb_file" ]; then
         install_deb_if_needed "$otbr_deb_file" "thirdreality-otbr-agent"
+        execute_fix_dependency_if_needed "thirdreality-otbr-agent"
     else
         echo "No otbr-agent deb file found in $WORK_DIR" >&2
     fi
@@ -342,6 +355,8 @@ install_zigbee2mqtt_debs() {
                 # If installation is successful, install dependencies
                 if [ -e "/usr/lib/thirdreality/post-install-zigbee2mqtt.sh" ]; then
                     /usr/lib/thirdreality/post-install-zigbee2mqtt.sh > /dev/null || true
+                else
+                    execute_fix_dependency_if_needed "thirdreality-zigbee-mqtt"
                 fi
 
                 apt-get install -f > /dev/null || true
@@ -367,6 +382,8 @@ install_zigbee2mqtt_debs() {
             if [ -e "/usr/lib/thirdreality/post-install-zigbee2mqtt.sh" ]; then
                 /usr/lib/thirdreality/post-install-zigbee2mqtt.sh > /dev/null || true
                 apt-get install -f > /dev/null || true
+            else
+                execute_fix_dependency_if_needed "thirdreality-zigbee-mqtt"
             fi            
         fi        
     fi
@@ -390,6 +407,7 @@ install_zigpy_handler_debs()
     zigpy_handler_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "zigpy_handler_*.deb" -type f 2>/dev/null | head -n 1)
     if [ -n "$zigpy_handler_deb_file" ]; then
         install_deb_if_needed "$zigpy_handler_deb_file" "thirdreality-zigpy-handler"
+        execute_fix_dependency_if_needed "thirdreality-zigpy-handler"
     else
         echo "Warning: No zigpy device handler deb file found in $WORK_DIR" >&2
         # Don't fail the script if zigpy handler is not found
@@ -404,34 +422,36 @@ install_supervisor_deb() {
 
     echo "Attempting to install supervisor deb..."
 
-    # 查找 linuxbox-supervisor deb 文件
+    # Find linuxbox-supervisor deb file
     supervisor_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "linuxbox-supervisor_*.deb" -type f | head -n 1)
     
     if [ -n "$supervisor_deb_file" ]; then
         echo "Found supervisor deb: $supervisor_deb_file"
         
-        # 获取 deb 的版本号
+        # Get deb version number
         deb_version=$(dpkg-deb --info "${supervisor_deb_file}" | grep Version | awk '{print $2}')
         echo "Deb version: $deb_version"
         
-        # 检查是否已经安装过
+        # Check if already installed
         if dpkg -l | grep -q "^ii\s*linuxbox-supervisor"; then
-            # 获取已安装的版本号
+            # Get installed version number
             installed_version=$(dpkg-query -W -f='${Version}\n' "linuxbox-supervisor" 2>/dev/null || true)
             echo "Installed version: $installed_version"
             
-            # 比较版本号，如果 deb 版本大于已安装版本则安装
+            # Compare version numbers, install if deb version is greater than installed version
             if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
                 echo "Newer version available. Installing: $supervisor_deb_file"
                 dpkg_install "$supervisor_deb_file"
+                execute_fix_dependency_if_needed "linuxbox-supervisor"
                 echo "Supervisor installation completed."
             else
                 echo "Installed version is up-to-date. No installation needed."
             fi
         else
-            # 没有安装过，直接安装
+            # Not installed before, install directly
             echo "linuxbox-supervisor is not installed. Installing: $supervisor_deb_file"
             dpkg_install "$supervisor_deb_file"
+            execute_fix_dependency_if_needed "linuxbox-supervisor"
             echo "Supervisor installation completed."
         fi
     else
