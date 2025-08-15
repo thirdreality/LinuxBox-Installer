@@ -120,30 +120,42 @@ if [ "$1" = "configure" ]; then
 	/usr/bin/systemctl daemon-reload
 
 
-	#msg=$(iw dev wlan0 link 2>&1)
-	/usr/bin/systemctl start otbr-agent || true
+	# 这里检查U盘中是否存在备份文件:
+	local SKIP_CHANNEL_CHANGE=false
+	if [ -d "/mnt/R3Backup" ]; then
+		local BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
+		if [ "$BACKUP_FILES" -gt 0 ]; then
+			echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/, skipping channel change operation"
+			SKIP_CHANNEL_CHANGE=true
+		fi
+	fi
+
+	if [ "$SKIP_CHANNEL_CHANGE" = "false" ]; then
+		/usr/bin/systemctl start otbr-agent.service || true
+	fi
 		
 	if [ -e "/usr/local/bin/supervisor" ]; then
 		/usr/local/bin/supervisor thread enabled || true
 	fi
 
-	# 如果Home Assistant正在运行，需要停止服务，然后更新配置，再恢复服务
-	if [[ "$(/usr/bin/systemctl is-active home-assistant.service)" == "active" ]]; then
-		echo "Stopping home-assistant.service"
-		/usr/bin/systemctl stop home-assistant.service
+	if [ "$SKIP_CHANNEL_CHANGE" = "false" ]; then
+		# 如果Home Assistant正在运行，需要停止服务，然后更新配置，再恢复服务
+		if [[ "$(/usr/bin/systemctl is-active home-assistant.service)" == "active" ]]; then
+			echo "Stopping home-assistant.service"
+			/usr/bin/systemctl stop home-assistant.service
 
-		sync
-		add_open_thread_entry_to_config
-		sync
+			sync
+			add_open_thread_entry_to_config
+			sync
 
-		echo "Restore home-assistant.service"
-		/usr/bin/systemctl start home-assistant.service
-	else
-		echo "Skipping home-assistant.service"
-		add_open_thread_entry_to_config
-		sync
-	fi	
-
+			echo "Restore home-assistant.service"
+			/usr/bin/systemctl start home-assistant.service
+		else
+			echo "Skipping home-assistant.service"
+			add_open_thread_entry_to_config
+			sync
+		fi	
+	fi
 	# # 检查 GPIO pin 0, 27 的状态
     # if gpioget 0 27; then
 	# 	echo "Info: Thread Device is found."

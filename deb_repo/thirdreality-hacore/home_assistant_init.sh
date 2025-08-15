@@ -14,12 +14,23 @@ function get_zigpy_ieee_from_device {
         if [[ -e "/dev/ttyAML3" ]]; then
             local TMP_INFO="/tmp/zigpy_info.tmp"
             echo "[INFO] Detecting Zigbee radio type..."
+            
+            # 检查是否存在 R3Backup 目录和设置文件，如果存在则跳过 change-channel 操作
+            local SKIP_CHANNEL_CHANGE=false
+            if [ -d "/mnt/R3Backup" ]; then
+                local BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
+                if [ "$BACKUP_FILES" -gt 0 ]; then
+                    echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/, skipping channel change operation"
+                    SKIP_CHANNEL_CHANGE=true
+                fi
+            fi
+            
             # Try BLZ first
             if zigpy radio --baudrate 2000000 blz /dev/ttyAML3 info > "$TMP_INFO" 2>&1; then
                 echo "[INFO] BLZ radio detected, checking current channel..."
                 # 修正channel字段提取逻辑，确保能正确获取Channel值
                 local CHANNEL=$(grep -i '^channel:' "$TMP_INFO" | awk '{print $2}' | xargs)
-                if [ "$CHANNEL" != "$ZIGPY_CHANNEL" ]; then
+                if [ "$CHANNEL" != "$ZIGPY_CHANNEL" ] && [ "$SKIP_CHANNEL_CHANGE" = false ]; then
                     echo "[INFO] Current channel is $CHANNEL, switching to $ZIGPY_CHANNEL..."
                     zigpy radio --baudrate 2000000 blz /dev/ttyAML3 change-channel --channel $ZIGPY_CHANNEL
                     echo "[INFO] Channel switched, retrieving channel info again..."
@@ -30,6 +41,10 @@ function get_zigpy_ieee_from_device {
                     if [ -f "${CONFIG_DIR}/homeassistant/zigbee.db" ]; then
                         rm -rf "${CONFIG_DIR}/homeassistant/zigbee.db"
                     fi
+                elif [ "$SKIP_CHANNEL_CHANGE" = true ]; then
+                    echo "[INFO] Skipping channel change due to backup files presence"
+                else
+                    echo "[INFO] Channel is already set to $ZIGPY_CHANNEL, no change needed"
                 fi
                 echo "[INFO] Detection complete, saving configuration..."
                 cat "$TMP_INFO" > "$ZHA_CONF"
@@ -41,11 +56,15 @@ function get_zigpy_ieee_from_device {
                 echo "[INFO] ZiGate radio detected, checking current channel..."
                 # 修正channel字段提取逻辑，确保能正确获取Channel值
                 local CHANNEL=$(grep -i '^channel:' "$TMP_INFO" | awk '{print $2}' | xargs)
-                if [ "$CHANNEL" != "$ZIGPY_CHANNEL" ]; then
+                if [ "$CHANNEL" != "$ZIGPY_CHANNEL" ] && [ "$SKIP_CHANNEL_CHANGE" = false ]; then
                     echo "[INFO] Current channel is $CHANNEL, switching to $ZIGPY_CHANNEL..."
                     zigpy radio zigate /dev/ttyAML3 change-channel --channel $ZIGPY_CHANNEL
                     echo "[INFO] Channel switched, retrieving channel info again..."
                     zigpy radio zigate /dev/ttyAML3 info > "$TMP_INFO" 2>&1
+                elif [ "$SKIP_CHANNEL_CHANGE" = true ]; then
+                    echo "[INFO] Skipping channel change due to backup files presence"
+                else
+                    echo "[INFO] Channel is already set to $ZIGPY_CHANNEL, no change needed"
                 fi
                 echo "[INFO] Detection complete, saving configuration..."
                 cat "$TMP_INFO" > "$ZHA_CONF"
