@@ -126,16 +126,16 @@ rm -rf ${DEFAULT_APT_CACHE}/*.deb
 
 stop_services
 
-local SKIP_CHANNEL_CHANGE=false
-if [ -d "/mnt/R3Backup" ]; then
+local SKIP_AUTO_CONFIGRATION=false
+if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ]; then
 	local BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
 	if [ "$BACKUP_FILES" -gt 0 ]; then
 		echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/, skipping channel change operation"
-		SKIP_CHANNEL_CHANGE=true
+		SKIP_AUTO_CONFIGRATION=true
 	fi
 fi
 
-if [ "$SKIP_CHANNEL_CHANGE" = "false" ]; then
+if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
     # Configure services
     configure_mosquitto
     configure_zigbee2mqtt

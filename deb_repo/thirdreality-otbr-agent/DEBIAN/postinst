@@ -121,16 +121,16 @@ if [ "$1" = "configure" ]; then
 
 
 	# 这里检查U盘中是否存在备份文件:
-	SKIP_CHANNEL_CHANGE=false
-	if [ -d "/mnt/R3Backup" ]; then
+	SKIP_AUTO_CONFIGRATION=false
+	if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ]; then
 		BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
 		if [ "$BACKUP_FILES" -gt 0 ]; then
 			echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/, skipping channel change operation"
-			SKIP_CHANNEL_CHANGE=true
+			SKIP_AUTO_CONFIGRATION=true
 		fi
 	fi
 
-	if [ "$SKIP_CHANNEL_CHANGE" = "false" ]; then
+	if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
 		/usr/bin/systemctl start otbr-agent.service || true
 	fi
 		
@@ -138,7 +138,7 @@ if [ "$1" = "configure" ]; then
 		/usr/local/bin/supervisor thread enabled || true
 	fi
 
-	if [ "$SKIP_CHANNEL_CHANGE" = "false" ]; then
+	if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
 		# 如果Home Assistant正在运行，需要停止服务，然后更新配置，再恢复服务
 		if [[ "$(/usr/bin/systemctl is-active home-assistant.service)" == "active" ]]; then
 			echo "Stopping home-assistant.service"
