@@ -253,6 +253,9 @@ if [ -d "${home_assistant_path}/bin" ]; then
     cp ${current_dir}/home_assistant_init.sh ${home_assistant_path}/bin/home_assistant_init.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_init.sh
 
+    cp ${current_dir}/home_assistant_zigbee_fix.sh ${home_assistant_path}/bin/home_assistant_zigbee_fix.sh
+    chmod +x ${home_assistant_path}/bin/home_assistant_zigbee_fix.sh
+
     cp ${current_dir}/home_assistant_blz_reset.sh ${home_assistant_path}/bin/home_assistant_blz_reset.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_blz_reset.sh
 

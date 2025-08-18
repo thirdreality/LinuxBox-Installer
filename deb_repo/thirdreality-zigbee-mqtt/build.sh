@@ -172,6 +172,6 @@ cp ${current_dir}/mosquitto.conf ${output_dir}/lib/thirdreality/conf/mosquitto.c
 print_info "Start to build zigbee-mqtt_${version}.deb ..."
 dpkg-deb --build ${output_dir} ${current_dir}/zigbee-mqtt_${version}.deb
 
-rm -rf ${output_dir} > /dev/null 2>&1
+#rm -rf ${output_dir} > /dev/null 2>&1
 
 print_info "Build zigbee-mqtt_${version}.deb finished ..."

@@ -36,6 +36,10 @@ if [ "$1" = "configure" ]; then
 		chmod +x /srv/homeassistant/bin/home_assistant_z2m_enable.py > /dev/null 2>&1
 	fi
 
+	if [ -e "/srv/homeassistant/bin/home_assistant_zigbee_fix.sh" ]; then
+		chmod +x /srv/homeassistant/bin/home_assistant_zigbee_fix.sh > /dev/null 2>&1
+	fi
+
 	info "Update zigbee default config ..."
 	if [ -e "/srv/homeassistant/bin/home_assistant_init.sh" ]; then
 		chmod +x /srv/homeassistant/bin/home_assistant_init.sh > /dev/null 2>&1
