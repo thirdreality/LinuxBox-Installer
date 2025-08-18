@@ -126,7 +126,7 @@ disable_services() {
 fix_manual_install() {
     echo "fix manual install ..."
     # 检查是安装还是升级
-    echo "Install library files ..."
+    echo "Install zigbee2mqtt files ..."
     
     if [[ "$(/usr/bin/systemctl is-active mosquitto.service)" == "active" ]]; then
         systemctl stop mosquitto.service >/dev/null || true
@@ -149,6 +149,7 @@ case "$1" in
     fix-dependency)
         # Main execution
         if [ -e "/usr/lib/thirdreality/post-fix-zigbee2mqtt.sh" ]; then
+            chmod +x /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh
             /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh > /dev/null || true
         fi
     ;;
