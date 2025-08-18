@@ -171,7 +171,9 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     # homeassistant.components.zha
     python3 -m pip install zigpy-cli==1.1.0 zha==0.0.60
 
-    cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
+    #cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
+    cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/thirdreality/zigpy-blz/@main
+
     
     # Apply patches
     print_info "Applying patches..."

@@ -100,11 +100,11 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     #pnpm i --frozen-lockfile
     pnpm install && pnpm run build
 
-
     print_info "Build zigbee2mqtt ..."
     mkdir -p /opt/zigbee2mqtt
     #git clone --depth 1 https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
-    git clone -b feat/blz-local-dev https://github.com/fangzheli/zigbee2mqtt.git /opt/zigbee2mqtt
+    #git clone -b feat/blz-local-dev https://github.com/fangzheli/zigbee2mqtt.git /opt/zigbee2mqtt
+    git clone -b feat/blz-local-dev https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
     cd /opt/zigbee2mqtt
     rm -rf /opt/zigbee2mqtt/.git /opt/zigbee2mqtt/.github
     pnpm install && pnpm run build

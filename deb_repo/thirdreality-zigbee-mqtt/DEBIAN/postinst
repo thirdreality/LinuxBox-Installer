@@ -136,8 +136,8 @@ fix_manual_install() {
         systemctl stop zigbee2mqtt.service >/dev/null || true
     fi
 
-    if [ -f "/lib/thirdreality/post-install-zigbee2mqtt.sh" ]; then
-        chmod +x /lib/thirdreality/post-install-zigbee2mqtt.sh
+    if [ -f "/usr/lib/thirdreality/post-fix-zigbee2mqtt.sh" ]; then
+        chmod +x /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh
     fi
 }
 
