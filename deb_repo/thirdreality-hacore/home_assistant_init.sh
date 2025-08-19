@@ -17,10 +17,10 @@ function get_zigpy_ieee_from_device {
             
             # 检查是否存在 R3Backup 目录和设置文件，如果存在则跳过 change-channel 操作
             local SKIP_AUTO_CONFIGRATION=false
-            if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ]; then
+            if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
                 local BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
                 if [ "$BACKUP_FILES" -gt 0 ]; then
-                    echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/, skipping channel change operation"
+                    echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/ with .enable-restore flag, skipping channel change operation"
                     SKIP_AUTO_CONFIGRATION=true
                 fi
             fi

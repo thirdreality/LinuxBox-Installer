@@ -3,7 +3,58 @@
 # Define source and destination paths
 SRC="/usr/lib/thirdreality/images"
 DST="/lib/firmware/bl706"
-VERSION="1.00.00"
+VERSION="1.04.02"
+WORK_DIR="/mnt/R3Install"
+
+ZIGBEE_FW_EMBED=false
+THREAD_FW_EMBED=false
+
+# Function to get current system version components
+get_system_version_components() {
+    if [ ! -f "/etc/t3r-release" ]; then
+        echo "Error: /etc/t3r-release file not found"
+        return 1
+    fi
+    
+    # Read current version info from /etc/t3r-release
+    local t3r_version_raw
+    t3r_version_raw=$(grep '^VERSION=' /etc/t3r-release | cut -d '"' -f2 | sed 's/^v//')
+    
+    if [ -z "$t3r_version_raw" ]; then
+        echo "Error: Could not read VERSION from /etc/t3r-release"
+        return 1
+    fi
+    
+    # Parse system version segments
+    local sys_major sys_zigbee sys_thread sys_armbian
+    sys_major=$(echo "$t3r_version_raw" | awk -F. '{print $1}')
+    sys_zigbee=$(echo "$t3r_version_raw" | awk -F. '{print $2}')
+    sys_thread=$(echo "$t3r_version_raw" | awk -F. '{print $3}')
+    sys_armbian=$(echo "$t3r_version_raw" | awk -F. '{print $4}')
+    
+    # Convert to integers for comparison (remove leading zeros)
+    sys_zigbee=$(echo "$sys_zigbee" | sed 's/^0*//')
+    sys_thread=$(echo "$sys_thread" | sed 's/^0*//')
+    
+    # Set defaults if empty
+    [ -z "$sys_zigbee" ] && sys_zigbee=0
+    [ -z "$sys_thread" ] && sys_thread=0
+    
+    echo "$sys_zigbee $sys_thread $sys_armbian"
+}
+
+# Function to get script version components
+get_script_version_components() {
+    local script_zigbee script_thread
+    script_zigbee=$(echo "$VERSION" | cut -d'.' -f2 | sed 's/^0*//')
+    script_thread=$(echo "$VERSION" | cut -d'.' -f3 | sed 's/^0*//')
+    
+    # Set defaults if empty
+    [ -z "$script_zigbee" ] && script_zigbee=0
+    [ -z "$script_thread" ] && script_thread=0
+    
+    echo "$script_zigbee $script_thread"
+}
 
 # Function to update version in /etc/t3r-release
 update_version_info() {
@@ -17,7 +68,7 @@ update_version_info() {
 
     echo "Updating $component version to $new_version in /etc/t3r-release"
 
-    # Read current version info from /etc/t3r-release (prefer 4-part if present)
+    # Read current version info from /etc/t3r-release
     local t3r_version_raw
     t3r_version_raw=$(grep '^VERSION=' /etc/t3r-release | cut -d '"' -f2 | sed 's/^v//')
     local t3r_version_id
@@ -41,7 +92,7 @@ update_version_info() {
     fi
     # Final fallback
     if [ -z "$armbian_version" ]; then
-        armbian_version="03"
+        armbian_version="05"
     fi
 
     # Update the requested component
@@ -67,10 +118,57 @@ update_version_info() {
     echo "Updated VERSION_ID to ${new_version_id}"
 }
 
-echo "Firmware upgrade script starting..."
+# Function to check if upgrade is needed
+check_upgrade_needed() {
+    local script_zigbee script_thread sys_zigbee sys_thread
+    local version_info
+    
+    # Get script version components
+    version_info=$(get_script_version_components)
+    script_zigbee=$(echo "$version_info" | cut -d' ' -f1)
+    script_thread=$(echo "$version_info" | cut -d' ' -f2)
+    
+    # Get system version components
+    version_info=$(get_system_version_components)
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to get system version components"
+        return 1
+    fi
+    
+    sys_zigbee=$(echo "$version_info" | cut -d' ' -f1)
+    sys_thread=$(echo "$version_info" | cut -d' ' -f2)
+    
+    echo "Script version: Zigbee=$script_zigbee, Thread=$script_thread"
+    echo "System version: Zigbee=$sys_zigbee, Thread=$sys_thread"
+    
+    local need_zigbee_upgrade=false
+    local need_thread_upgrade=false
+    
+    # Check if script version is higher than system version
+    if [ "$script_zigbee" -gt "$sys_zigbee" ]; then
+        echo "Zigbee upgrade needed: script version ($script_zigbee) > system version ($sys_zigbee)"
+        need_zigbee_upgrade=true
+    else
+        echo "Zigbee upgrade not needed: script version ($script_zigbee) <= system version ($sys_zigbee)"
+    fi
+    
+    if [ "$script_thread" -gt "$sys_thread" ]; then
+        echo "Thread upgrade needed: script version ($script_thread) > system version ($sys_thread)"
+        need_thread_upgrade=true
+    else
+        echo "Thread upgrade not needed: script version ($script_thread) <= system version ($sys_thread)"
+    fi
+    
+    echo "$need_zigbee_upgrade $need_thread_upgrade"
+}
 
 # Function to flash zigbee firmware with service management
 flash_zigbee() {
+    if [ "$ZIGBEE_FW_EMBED" = "false" ]; then
+        echo "Zigbee firmware is not embedded, skipping flash"
+        return
+    fi
+
     echo "upgrade bl702/706 zigbee firmware ..."
     
     # Check and stop services if they are running
@@ -132,6 +230,11 @@ flash_zigbee() {
 
 # Function to flash thread firmware with service management
 flash_thread() {
+    if [ "$THREAD_FW_EMBED" = "false" ]; then
+        echo "Thread firmware is not embedded, skipping flash"
+        return
+    fi
+
     echo "upgrade bl702/706 thread firmware ..."
     
     # Check and stop otbr-agent.service if it is running
@@ -189,10 +292,9 @@ flash_thread() {
     update_version_info "thread" "$thread_version"
 }
 
-if [ -e "/usr/local/bin/supervisor" ]; then
-    /usr/local/bin/supervisor led sys_firmware_updating  || true
-fi
+echo "Firmware upgrade script starting..."
 
+# Copy necessary files first
 if [ -f "$SRC/bl706_func.sh" ]; then
     echo "copy bl706_func.sh to $DST/bl706_func.sh"
     cp $SRC/bl706_func.sh $DST/bl706_func.sh
@@ -205,11 +307,44 @@ if [ -f "$SRC/bflb_iot.tar.gz" ]; then
     rm -rf $DST/bflb_iot > /dev/null 2>&1
 fi
 
-# Call zigbee flash function
-flash_zigbee
-
-# Call thread flash function
-flash_thread
+# Check for force upgrade mode
+if [ -f "$WORK_DIR/.force_board_flash" ]; then
+    echo "Force upgrade mode detected: $WORK_DIR/.force_board_flash"
+    echo "Executing both zigbee and thread flash operations..."
+    
+    # Execute both flash operations
+    flash_zigbee
+    flash_thread
+else
+    echo "Normal upgrade mode: checking version compatibility..."
+    
+    # Check if upgrade is needed
+    local upgrade_info
+    upgrade_info=$(check_upgrade_needed)
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to check upgrade requirements"
+        exit 1
+    fi
+    
+    local need_zigbee need_thread
+    need_zigbee=$(echo "$upgrade_info" | cut -d' ' -f1)
+    need_thread=$(echo "$upgrade_info" | cut -d' ' -f2)
+    
+    # Execute flash operations based on version comparison
+    if [ "$need_zigbee" = "true" ]; then
+        echo "Executing zigbee firmware upgrade..."
+        flash_zigbee
+    else
+        echo "Skipping zigbee firmware upgrade (version not higher)"
+    fi
+    
+    if [ "$need_thread" = "true" ]; then
+        echo "Executing thread firmware upgrade..."
+        flash_thread
+    else
+        echo "Skipping thread firmware upgrade (version not higher)"
+    fi
+fi
 
 if [ -e "/usr/local/bin/supervisor" ]; then
     /usr/local/bin/supervisor led off

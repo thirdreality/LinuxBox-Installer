@@ -122,10 +122,10 @@ if [ "$1" = "configure" ]; then
 
 	# 这里检查U盘中是否存在备份文件:
 	SKIP_AUTO_CONFIGRATION=false
-	if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ]; then
+	if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
 		BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
 		if [ "$BACKUP_FILES" -gt 0 ]; then
-			echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/, skipping channel change operation"
+			echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/ with .enable-restore flag, skipping channel change operation"
 			SKIP_AUTO_CONFIGRATION=true
 		fi
 	fi

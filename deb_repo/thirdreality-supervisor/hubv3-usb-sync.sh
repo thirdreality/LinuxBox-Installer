@@ -165,7 +165,7 @@ install_deb_if_needed() {
         
         if dpkg --compare-versions "$deb_version" gt "$current_version"; then
             echo "A newer version is available. Installing: ${deb_file}"
-            dpkg_install "$deb_file"
+            dpkg_install "$deb_file" "$package_name"
 
             if [ -e "/usr/local/bin/supervisor" ]; then
                 /usr/local/bin/supervisor setting updated  || true
@@ -175,7 +175,7 @@ install_deb_if_needed() {
         fi
     else
         echo "${package_name} is not installed or version not available. Installing: ${deb_file}"
-        dpkg_install "$deb_file"
+        dpkg_install "$deb_file" "$package_name"
 
         if [ -e "/usr/local/bin/supervisor" ]; then
             /usr/local/bin/supervisor setting updated  || true
@@ -185,10 +185,12 @@ install_deb_if_needed() {
 
 dpkg_install() {
     local deb_file="$1"
+    local package_name="$2"
     if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$deb_file"; then
         echo "Warning: Failed to install $deb_file" >&2
     else
-        apt-mark manual "$(dpkg-deb --info "$deb_file" | grep Package | awk '{print $2}')" || echo "Warning: Failed to mark package as manual" >&2
+        apt-mark manual "$package_name" || echo "Warning: Failed to mark package as manual" >&2
+        execute_fix_dependency_if_needed "$package_name"
     fi
 }
 
@@ -207,7 +209,7 @@ install_board_flash_debs() {
         
         # Get deb version number
         deb_version=$(dpkg-deb --info "${board_firmware_deb_file}" | grep Version | awk '{print $2}')
-        echo "Deb version: $deb_version"
+        echo "Board flash deb version: $deb_version"
         
         # Check if already installed
         if dpkg -l | grep -q "^ii\s*thirdreality-board-firmware"; then
@@ -218,14 +220,16 @@ install_board_flash_debs() {
             # Compare version numbers, install if deb version is greater than installed version
             if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
                 echo "Newer version available. Installing: $board_firmware_deb_file"
-                dpkg_install "$board_firmware_deb_file"
-                execute_fix_dependency_if_needed "thirdreality-board-firmware"
+                dpkg_install "$board_firmware_deb_file" "thirdreality-board-firmware"
             else
                 echo "Installed version is up-to-date. No installation needed."
             fi
         else
-            # Not installed before, read version information from /etc/t3r-release
-            if [ -f "/etc/t3r-release" ]; then
+            # Not installed before, check for force flag first
+            if [ -f "$WORK_DIR/.force_board_flash" ]; then
+                echo "Force flag found, installing board firmware without version check"
+                dpkg_install "$board_firmware_deb_file" "thirdreality-board-firmware"
+            elif [ -f "/etc/t3r-release" ]; then
                 # Read version information from /etc/t3r-release
                 source "/etc/t3r-release"
                 echo "System version from /etc/t3r-release: $VERSION"
@@ -246,8 +250,7 @@ install_board_flash_debs() {
                         # Check if either zigbee or thread version is greater than system version
                         if [ "$deb_zigbee_version" -gt "$system_zigbee_version" ] || [ "$deb_thread_version" -gt "$system_thread_version" ]; then
                             echo "Either zigbee or thread version is newer. Installing: $board_firmware_deb_file"
-                            dpkg_install "$board_firmware_deb_file"
-                            execute_fix_dependency_if_needed "thirdreality-board-firmware"
+                            dpkg_install "$board_firmware_deb_file" "thirdreality-board-firmware"
                         else
                             echo "Version check failed. Zigbee: $deb_zigbee_version > $system_zigbee_version, Thread: $deb_thread_version > $system_thread_version"
                             echo "No installation needed."
@@ -300,7 +303,6 @@ install_core_matter_debs() {
         python3_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "python_*.deb" -type f | head -n 1)
         if [ -n "$python3_deb_file" ]; then
             install_deb_if_needed "$python3_deb_file" "thirdreality-python3"
-            execute_fix_dependency_if_needed "thirdreality-python3"
         else
             echo "No python3 deb file found in $WORK_DIR" >&2
         fi
@@ -310,7 +312,6 @@ install_core_matter_debs() {
     hacore_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore_*.deb" -type f | head -n 1)
     if [ -n "$hacore_deb_file" ]; then
         install_deb_if_needed "$hacore_deb_file" "thirdreality-hacore"
-        execute_fix_dependency_if_needed "thirdreality-hacore"
     else
         echo "No hacore deb file found in $WORK_DIR" >&2
     fi
@@ -319,7 +320,6 @@ install_core_matter_debs() {
     otbr_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "otbr-agent_*.deb" -type f | head -n 1)
     if [ -n "$otbr_deb_file" ]; then
         install_deb_if_needed "$otbr_deb_file" "thirdreality-otbr-agent"
-        execute_fix_dependency_if_needed "thirdreality-otbr-agent"
     else
         echo "No otbr-agent deb file found in $WORK_DIR" >&2
     fi
@@ -330,62 +330,17 @@ install_core_matter_debs() {
 install_zigbee2mqtt_debs() {
     echo "Attempting to install Zigbee2MQTT debs..."
 
-    # Install zigbee-mqtt (e.g., zigbee-mqtt_2.3.0.deb)
-    # Check if thirdreality-zigbee-mqtt package is already installed
-    if ! dpkg -l | grep -q "^ii\s*thirdreality-zigbee-mqtt"; then
-        zigbee_mqtt_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "zigbee-mqtt_*.deb" -type f | head -n 1)
-        if [ -n "$zigbee_mqtt_deb_file" ]; then
-
-            if [ -e "/usr/local/bin/supervisor" ]; then
-                /usr/local/bin/supervisor led sys_firmware_updating  || true
-            fi
-
-            echo "+ ${zigbee_mqtt_deb_file}. " | wall
-            echo "Installing: $zigbee_mqtt_deb_file"
-
-            if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$zigbee_mqtt_deb_file"; then
-                echo "Warning: Failed to install $zigbee_mqtt_deb_file" >&2
-            else
-                apt-mark manual "thirdreality-zigbee-mqtt" || echo "Warning: Failed to mark thirdreality-zigbee-mqtt as manual" >&2
-
-                if [ -e "/usr/local/bin/supervisor" ]; then
-                    /usr/local/bin/supervisor setting updated  || true
-                fi
-
-                # If installation is successful, install dependencies
-                if [ -e "/usr/lib/thirdreality/post-install-zigbee2mqtt.sh" ]; then
-                    /usr/lib/thirdreality/post-install-zigbee2mqtt.sh > /dev/null || true
-                else
-                    execute_fix_dependency_if_needed "thirdreality-zigbee-mqtt"
-                fi
-
-                apt-get install -f > /dev/null || true
-
-            fi
-        else
-            echo "No zigbee-mqtt deb file found in $WORK_DIR" >&2
-        fi
+    zigbee_mqtt_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "zigbee-mqtt_*.deb" -type f | head -n 1)
+    if [ -n "$zigbee_mqtt_deb_file" ]; then
+        install_deb_if_needed "$zigbee_mqtt_deb_file" "thirdreality-zigbee-mqtt"
+        # 老版本兼容：If installation is successful, install dependencies
+        # New: /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh
+        if [ -e "/usr/lib/thirdreality/post-install-zigbee2mqtt.sh" ]; then
+            /usr/lib/thirdreality/post-install-zigbee2mqtt.sh > /dev/null || true
+        fi             
+        apt-get install -f > /dev/null || true
     else
-        echo "thirdreality-zigbee-mqtt is already installed, upgrading."
-
-        echo "Installing: $zigbee_mqtt_deb_file"
-        if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$zigbee_mqtt_deb_file"; then
-            echo "Warning: Failed to install $zigbee_mqtt_deb_file" >&2
-        else
-            apt-mark manual "thirdreality-zigbee-mqtt" || echo "Warning: Failed to mark thirdreality-zigbee-mqtt as manual" >&2
-        
-            if [ -e "/usr/local/bin/supervisor" ]; then
-                /usr/local/bin/supervisor setting updated  || true
-            fi         
-
-            # If installation is successful, install dependencies
-            if [ -e "/usr/lib/thirdreality/post-install-zigbee2mqtt.sh" ]; then
-                /usr/lib/thirdreality/post-install-zigbee2mqtt.sh > /dev/null || true
-                apt-get install -f > /dev/null || true
-            else
-                execute_fix_dependency_if_needed "thirdreality-zigbee-mqtt"
-            fi            
-        fi        
+        echo "No zigbee-mqtt deb file found in $WORK_DIR" >&2
     fi
 }
 
@@ -407,7 +362,6 @@ install_zigpy_handler_debs()
     zigpy_handler_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "zigpy_handler_*.deb" -type f 2>/dev/null | head -n 1)
     if [ -n "$zigpy_handler_deb_file" ]; then
         install_deb_if_needed "$zigpy_handler_deb_file" "thirdreality-zigpy-handler"
-        execute_fix_dependency_if_needed "thirdreality-zigpy-handler"
     else
         echo "Warning: No zigpy device handler deb file found in $WORK_DIR" >&2
         # Don't fail the script if zigpy handler is not found
@@ -441,8 +395,7 @@ install_supervisor_deb() {
             # Compare version numbers, install if deb version is greater than installed version
             if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
                 echo "Newer version available. Installing: $supervisor_deb_file"
-                dpkg_install "$supervisor_deb_file"
-                execute_fix_dependency_if_needed "linuxbox-supervisor"
+                dpkg_install "$supervisor_deb_file" "linuxbox-supervisor"
                 echo "Supervisor installation completed."
             else
                 echo "Installed version is up-to-date. No installation needed."
@@ -450,8 +403,7 @@ install_supervisor_deb() {
         else
             # Not installed before, install directly
             echo "linuxbox-supervisor is not installed. Installing: $supervisor_deb_file"
-            dpkg_install "$supervisor_deb_file"
-            execute_fix_dependency_if_needed "linuxbox-supervisor"
+            dpkg_install "$supervisor_deb_file" "linuxbox-supervisor" 
             echo "Supervisor installation completed."
         fi
     else
@@ -461,12 +413,28 @@ install_supervisor_deb() {
     return 0
 }
 
+validate_config() {
+    # Validate configuration and clean up invalid flags
+    if [ -d "/mnt/R3Backup" ] && [ -f "/mnt/R3Backup/.enable-backup" ]; then
+        # Check if thirdreality-python3 package is installed
+        if ! dpkg -l | grep -q "^ii\s*thirdreality-python3"; then
+            echo "Warning: .enable-backup flag found but thirdreality-python3 package not installed"
+            echo "Removing .enable-backup flag..."
+            rm -f "/mnt/R3Backup/.enable-backup"
+            echo ".enable-backup flag removed due to missing thirdreality-python3 package"
+        fi
+    fi
+}
+
 main_procedure()
-{
+{  
     if [ -e "/usr/local/bin/supervisor" ]; then
         /usr/local/bin/supervisor led sys_firmware_updating  || true
     fi
 
+    # Validate configuration first
+    validate_config
+    
     echo "System is start to install deb packages. " | wall
 
     if [ -d "$WORK_DIR" ]; then
@@ -524,11 +492,33 @@ main_procedure()
 
     # Auto restore functionality
     if [ -d "/mnt/R3Backup" ] && [ -e "/usr/local/bin/supervisor" ]; then
-        setting_files=$(find "/mnt/R3Backup" -maxdepth 1 -name "setting_*.tar.gz" -type f 2>/dev/null || true)
-        if [ -n "$setting_files" ]; then
-            echo "Found backup settings, attempting to restore..."
-            echo "System found backup settings, attempting to restore..." | wall
-            /usr/local/bin/supervisor setting restore || true
+        # Check if .enable-backup exists - force backup and exit
+        if [ -f "/mnt/R3Backup/.enable-backup" ]; then
+            /usr/local/bin/supervisor led sys_event_off || true
+            echo "Found .enable-backup flag, forcing backup..."
+            echo "System found .enable-backup flag, forcing backup..." | wall
+            /usr/local/bin/supervisor setting backup || true
+            rm -f "/mnt/R3Backup/.enable-backup"
+            echo "Backup completed, .enable-backup flag removed"
+            /usr/local/bin/supervisor led sys_event_off || true
+            return 0
+        fi
+        
+        # Check if .enable-restore exists - force restore if flag is present
+        if [ -f "/mnt/R3Backup/.enable-restore" ]; then
+            setting_files=$(find "/mnt/R3Backup" -maxdepth 1 -name "setting_*.tar.gz" -type f 2>/dev/null || true)
+            if [ -n "$setting_files" ]; then
+                /usr/local/bin/supervisor led sys_firmware_updating  || true
+                echo "Found .enable-restore flag, attempting to restore..."
+                echo "System found .enable-restore flag, attempting to restore..." | wall
+                /usr/local/bin/supervisor setting restore || true
+                /usr/local/bin/supervisor led sys_event_off || true
+                echo "Restore completed, .enable-restore flag removed"
+                rm -f "/mnt/R3Backup/.enable-restore"
+            else
+                echo "Warning: .enable-restore flag found but no setting files available"
+                rm -f "/mnt/R3Backup/.enable-restore"
+            fi
         fi
     fi
 }

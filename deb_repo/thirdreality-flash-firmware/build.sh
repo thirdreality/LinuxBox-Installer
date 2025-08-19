@@ -71,15 +71,15 @@ if [ -f "${current_dir}/upgrade_firmware.sh" ]; then
     sed -i "s/VERSION=\"1.00.00\"/VERSION=\"${version}\"/" ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
 
     # Check if zigbee firmware exists and modify upgrade_firmware.sh accordingly
-    if [ ! -f "${current_dir}/partition_images/blz_whole_img.bin" ]; then
-        # Comment out zigbee function call if firmware doesn't exist
-        sed -i 's/^flash_zigbee$/#flash_zigbee/' ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
+    if [ -f "${current_dir}/partition_images/blz_whole_img.bin" ]; then
+        # Set ZIGBEE_FW_EMBED to true if firmware exists
+        sed -i 's/^ZIGBEE_FW_EMBED=false$/ZIGBEE_FW_EMBED=true/' ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
     fi
 
     # Check if thread firmware exists and modify upgrade_firmware.sh accordingly
-    if [ ! -f "${current_dir}/partition_images/thread_whole_img.bin" ]; then
-        # Comment out thread function call if firmware doesn't exist
-        sed -i 's/^flash_thread$/#flash_thread/' ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
+    if [ -f "${current_dir}/partition_images/thread_whole_img.bin" ]; then
+        # Set THREAD_FW_EMBED to true if firmware exists
+        sed -i 's/^THREAD_FW_EMBED=false$/THREAD_FW_EMBED=true/' ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
     fi
 
 fi
