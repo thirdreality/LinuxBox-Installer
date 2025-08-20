@@ -6,9 +6,6 @@ DST="/lib/firmware/bl706"
 VERSION="1.04.02"
 WORK_DIR="/mnt/R3Install"
 
-ZIGBEE_FW_EMBED=false
-THREAD_FW_EMBED=false
-
 # Function to get current system version components
 get_system_version_components() {
     if [ ! -f "/etc/t3r-release" ]; then
@@ -164,24 +161,7 @@ check_upgrade_needed() {
 
 # Function to flash zigbee firmware with service management
 flash_zigbee() {
-    if [ "$ZIGBEE_FW_EMBED" = "false" ]; then
-        echo "Zigbee firmware is not embedded, skipping flash"
-        return
-    fi
-
     echo "upgrade bl702/706 zigbee firmware ..."
-    
-    # Check and stop services if they are running
-    local services_to_manage=("home-assistant.service" "zigbee2mqtt.service")
-    local stopped_services=()
-    
-    for service in "${services_to_manage[@]}"; do
-        if systemctl is-active --quiet "$service"; then
-            echo "Stopping $service before flashing..."
-            systemctl stop "$service"
-            stopped_services+=("$service")
-        fi
-    done
 
     echo "Checking for zigbee firmware at: $SRC/blz_whole_img.bin"
     if [ -f "$SRC/partition_images/blz_whole_img.bin" ]; then
@@ -209,43 +189,41 @@ flash_zigbee() {
                 echo "Zigbee firmware updated (MD5 changed)"
             fi
         fi
+
+        # Check and stop services if they are running
+        local services_to_manage=("home-assistant.service" "zigbee2mqtt.service")
+        local stopped_services=()
+        
+        for service in "${services_to_manage[@]}"; do
+            if systemctl is-active --quiet "$service"; then
+                echo "Stopping $service before flashing..."
+                systemctl stop "$service"
+                stopped_services+=("$service")
+            fi
+        done
+
+        # Execute flash command
+        chmod +x $DST/bl706_func.sh
+        $DST/bl706_func.sh flash zigbee
+        
+        # Restart previously stopped services
+        for service in "${stopped_services[@]}"; do
+            echo "Restarting $service after flashing..."
+            systemctl start "$service"
+        done
+        
+        # Update version information after successful zigbee flash
+        local zigbee_version=$(echo "$VERSION" | cut -d'.' -f2)
+        update_version_info "zigbee" "$zigbee_version"
+
     else
         echo "Zigbee firmware source file not found: $SRC/partition_images/blz_whole_img.bin"
     fi
-    
-    # Execute flash command
-    chmod +x $DST/bl706_func.sh
-    $DST/bl706_func.sh flash zigbee
-    
-    # Restart previously stopped services
-    for service in "${stopped_services[@]}"; do
-        echo "Restarting $service after flashing..."
-        systemctl start "$service"
-    done
-    
-    # Update version information after successful zigbee flash
-    local zigbee_version=$(echo "$VERSION" | cut -d'.' -f2)
-    update_version_info "zigbee" "$zigbee_version"
 }
 
 # Function to flash thread firmware with service management
 flash_thread() {
-    if [ "$THREAD_FW_EMBED" = "false" ]; then
-        echo "Thread firmware is not embedded, skipping flash"
-        return
-    fi
-
     echo "upgrade bl702/706 thread firmware ..."
-    
-    # Check and stop otbr-agent.service if it is running
-    local service_to_manage="otbr-agent.service"
-    local was_running=false
-    
-    if systemctl is-active --quiet "$service_to_manage"; then
-        echo "Stopping $service_to_manage before flashing..."
-        systemctl stop "$service_to_manage"
-        was_running=true
-    fi
     
     echo "Checking for thread firmware at: $SRC/thread_whole_img.bin"
     if [ -f "$SRC/partition_images/thread_whole_img.bin" ]; then
@@ -260,7 +238,6 @@ flash_thread() {
         
         # Copy new firmware
         cp $SRC/partition_images/thread_whole_img.bin $DST/partition_1m_images/thread_whole_img.bin
-        
         # Calculate new firmware MD5
         new_md5=$(md5sum "$DST/partition_1m_images/thread_whole_img.bin" | cut -d' ' -f1)
         echo "New thread firmware MD5: $new_md5"
@@ -273,23 +250,34 @@ flash_thread() {
                 echo "Thread firmware updated (MD5 changed)"
             fi
         fi
+
+        # Check and stop otbr-agent.service if it is running
+        local service_to_manage="otbr-agent.service"
+        local was_running=false
+       
+        if systemctl is-active --quiet "$service_to_manage"; then
+            echo "Stopping $service_to_manage before flashing..."
+            systemctl stop "$service_to_manage"
+            was_running=true
+        fi
+
+        # Execute flash command
+        chmod +x $DST/bl706_func.sh
+        $DST/bl706_func.sh flash thread
+        
+        # Restart otbr-agent.service if it was running before
+        if [ "$was_running" = true ]; then
+            echo "Restarting $service_to_manage after flashing..."
+            systemctl start "$service_to_manage"
+        fi
+        
+        # Update version information after successful thread flash
+        local thread_version=$(echo "$VERSION" | cut -d'.' -f3)
+        update_version_info "thread" "$thread_version"
+
     else
         echo "Thread firmware source file not found: $SRC/partition_images/thread_whole_img.bin"
     fi
-    
-    # Execute flash command
-    chmod +x $DST/bl706_func.sh
-    $DST/bl706_func.sh flash thread
-    
-    # Restart otbr-agent.service if it was running before
-    if [ "$was_running" = true ]; then
-        echo "Restarting $service_to_manage after flashing..."
-        systemctl start "$service_to_manage"
-    fi
-    
-    # Update version information after successful thread flash
-    local thread_version=$(echo "$VERSION" | cut -d'.' -f3)
-    update_version_info "thread" "$thread_version"
 }
 
 echo "Firmware upgrade script starting..."
