@@ -3,7 +3,7 @@
 # Define source and destination paths
 SRC="/usr/lib/thirdreality/images"
 DST="/lib/firmware/bl706"
-VERSION="1.04.02"
+VERSION="1.08.01"
 WORK_DIR="/mnt/R3Install"
 
 # Function to get current system version components
