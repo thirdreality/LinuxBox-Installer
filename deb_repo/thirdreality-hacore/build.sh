@@ -6,6 +6,8 @@ home_assistant_path="/srv/homeassistant"
 matter_server_path="/srv/matter_server"
 python3_dir="/usr/local/python3" # install target directory
 
+UV_INSTALLED=false
+
 REBUILD=false
 CLEAN=false
 
@@ -116,6 +118,14 @@ fi
 if [[ "$CURRENT_PYTHON" < "3.13.0" ]]; then
     print_info "Python 3.13+ is needed, abort ..."
     exit 1
+fi
+
+if command -v uv >/dev/null 2>&1; then
+    UV_INSTALLED=true
+    echo "uv 已安装，版本: $(uv --version)"
+else
+    UV_INSTALLED=false
+    echo "uv 未安装或不在 PATH 中"
 fi
 
 # 检查是否设置了 Home Assistant 和其他版本号
@@ -311,9 +321,9 @@ cp /lib/systemd/system/matter-server.service ${output_dir}/lib/systemd/system/
 print_info "Start to build hacore_${version}.deb ..."
 dpkg-deb --build ${output_dir} ${current_dir}/hacore_${version}.deb
 
-rm -rf ${output_dir}/srv > /dev/null 2>&1
-rm -rf ${output_dir}/usr > /dev/null 2>&1
-rm -rf ${output_dir}/lib > /dev/null 2>&1
+# rm -rf ${output_dir}/srv > /dev/null 2>&1
+# rm -rf ${output_dir}/usr > /dev/null 2>&1
+# rm -rf ${output_dir}/lib > /dev/null 2>&1
 #rm -rf ${output_dir} > /dev/null 2>&1
 
 print_info "Build hacore_${version}.deb finished ..."

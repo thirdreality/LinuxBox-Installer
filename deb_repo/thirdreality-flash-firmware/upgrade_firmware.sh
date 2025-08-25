@@ -94,9 +94,11 @@ update_version_info() {
 
     # Update the requested component
     if [ "$component" = "zigbee" ]; then
-        zigbee_version=$(printf "%02d" "$new_version")
+        #zigbee_version=$(printf "%02d" "$new_version")
+        zigbee_version=$(printf "%02d" "$((10#$new_version))")
     elif [ "$component" = "thread" ]; then
-        thread_version=$(printf "%02d" "$new_version")
+        #thread_version=$(printf "%02d" "$new_version")
+        thread_version=$(printf "%02d" "$((10#$new_version))")
     fi
 
     # Ensure major exists

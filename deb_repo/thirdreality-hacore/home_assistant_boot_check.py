@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import time
 import subprocess
 from pathlib import Path
 
@@ -58,7 +59,30 @@ def check_entity_file(file_path):
     print(file_path + " validate success")
     return
 
+def initialize_pin():
+    # Initialize GPIO pins for Zigbee and Thread modules
+    print("Reset Zigbee module GPIOZ_1/GPIOZ_3...")
+    # Zigbee reset: DB_RSTN1/GPIOZ_1
+    # Zigbee boot: DB_BOOT1/GPIOZ_3
+    try:
+        subprocess.run(["gpioset", "0", "3=0"], check=True)
+        time.sleep(0.2)
+        subprocess.run(["gpioset", "0", "1=1"], check=True)
+        time.sleep(0.2)
+        subprocess.run(["gpioset", "0", "1=0"], check=True)
+        time.sleep(0.2)
+        subprocess.run(["gpioset", "0", "1=1"], check=True)
+            
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing Zigbee gpioset command: {e}")
+    except Exception as e:
+        print(f"Error initializing Zigbee GPIO pins: {e}")    
+    
+    return
+
 def main_run(dir):
+    initialize_pin()
+
     if not dir.endswith(os.sep):
         dir += os.sep
     dir += '.storage' + os.sep
