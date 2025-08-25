@@ -115,6 +115,21 @@ update_version_info() {
 
     echo "Updated VERSION to v${new_version_string}"
     echo "Updated VERSION_ID to ${new_version_id}"
+    
+    # 在/var/log目录下创建更新记录文件
+    local update_record_file="/var/log/thirdreality-update-${component}-$(date +%Y%m%d-%H%M%S).log"
+    {
+        echo "=== ThirdReality Firmware Update Record ==="
+        echo "Update Time: $(date)"
+        echo "Component: $component"
+        echo "New Version: $new_version"
+        echo "Full Version String: v${new_version_string}"
+        echo "Version ID: ${new_version_id}"
+        echo "Updated File: /etc/t3r-release"
+        echo "=========================================="
+    } > "$update_record_file"
+    
+    echo "Update record saved to: $update_record_file"
 }
 
 # Function to check if upgrade is needed
