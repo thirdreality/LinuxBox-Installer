@@ -18,6 +18,20 @@ if [[ "$(/usr/bin/systemctl is-active otbr-firewall)" == "active" ]]; then
     /usr/bin/systemctl disable otbr-firewall
 fi
 
+if [[ "$(/usr/bin/systemctl is-active otbr-agent)" == "active" ]]; then
+    echo "Stopping otbr-agent"
+    /usr/bin/systemctl stop otbr-agent
+    /usr/bin/systemctl disable otbr-agent
+fi
+
+if [[ "$(/usr/bin/systemctl is-active hubv3-otbr-agent)" == "active" ]]; then
+    echo "Stopping hubv3-otbr-agent"
+    /usr/bin/systemctl stop hubv3-otbr-agent
+    /usr/bin/systemctl disable hubv3-otbr-agent
+fi
+
+
+
 /usr/bin/systemctl daemon-reload
 
 #sudo apt-get install --no-install-recommends -y wget iproute2 iputils-ping libreadline-dev libncurses-dev

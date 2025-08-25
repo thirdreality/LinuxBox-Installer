@@ -173,14 +173,20 @@ else
     exit 1
 fi
 
+cp ${current_dir}/otbr-agent-init.sh ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
 cp ${current_dir}/hubv3-otbr-agent.sh ${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh
 cp ${current_dir}/otbr_database ${output_dir}/usr/lib/thirdreality/otbr_database
 
+chmod +x ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
 chmod +x ${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh
 chmod +x ${output_dir}/usr/lib/thirdreality/otbr_database
 
 cp /usr/lib/systemd/system/otbr-agent.service ${output_dir}/usr/lib/systemd/system/
 cp /usr/lib/systemd/system/hubv3-otbr-agent.service ${output_dir}/usr/lib/systemd/system/
+
+
+# 在otbr-agent.service的ExecStartPre=/usr/sbin/service mdns start之前添加ExecStartPre=/usr/lib/thirdreality/otbr-agent-init.sh
+sed -i '/ExecStartPre=\/usr\/sbin\/service mdns start/i ExecStartPre=/usr/lib/thirdreality/otbr-agent-init.sh' ${output_dir}/usr/lib/systemd/system/otbr-agent.service
 
 if [ -d "/usr/share/otbr-web" ];then
     cp /usr/share/otbr-web ${output_dir}/usr/share/otbr-web
@@ -233,9 +239,9 @@ cp /etc/nss_mdns.conf ${output_dir}/etc/
 print_info "Start to build otbr-agent_${version}.deb ..."
 dpkg-deb --build ${output_dir} ${current_dir}/otbr-agent_${version}.deb
 
-rm -rf ${output_dir}/usr > /dev/null 2>&1
-rm -rf ${output_dir}/etc > /dev/null 2>&1
-rm -rf ${output_dir} > /dev/null 2>&1
+# rm -rf ${output_dir}/usr > /dev/null 2>&1
+# rm -rf ${output_dir}/etc > /dev/null 2>&1
+# rm -rf ${output_dir} > /dev/null 2>&1
 
 print_info "Build otbr-agent_${version}.deb finished ..."
 

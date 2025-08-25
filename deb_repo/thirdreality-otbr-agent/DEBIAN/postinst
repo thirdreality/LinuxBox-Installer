@@ -111,11 +111,12 @@ if [ "$1" = "configure" ]; then
 
 	rt_tables_install
 
-	chmod +x /usr/lib/thirdreality/hubv3-otbr-agent.sh
-	chmod +x /usr/lib/thirdreality/otbr_database
+	chmod +x /usr/lib/thirdreality/hubv3-otbr-agent.sh || true
+	chmod +x /usr/lib/thirdreality/otbr-agent-init.sh || true
+	chmod +x /usr/lib/thirdreality/otbr_database || true
 
-	/usr/bin/systemctl enable hubv3-otbr-agent.service
-	/usr/bin/systemctl disable otbr-agent || true
+	/usr/bin/systemctl disable hubv3-otbr-agent.service  || true
+	/usr/bin/systemctl enable otbr-agent.service  || true
 	/usr/bin/systemctl reload dbus
 	/usr/bin/systemctl daemon-reload
 
