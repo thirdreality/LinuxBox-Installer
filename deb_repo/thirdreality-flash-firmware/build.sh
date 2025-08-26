@@ -63,6 +63,16 @@ if [ -f "${current_dir}/bl706_func.sh" ]; then
     chmod +x ${output_dir}/usr/lib/thirdreality/images/bl706_func.sh
 fi
 
+if [ -f "${current_dir}/check_thread_firmware.py" ]; then
+    cp ${current_dir}/check_thread_firmware.py ${output_dir}/usr/lib/thirdreality/images/
+    chmod +x ${output_dir}/usr/lib/thirdreality/images/check_thread_firmware.py
+fi
+
+if [ -f "${current_dir}/check_zigbee_firmware.py" ]; then
+    cp ${current_dir}/check_zigbee_firmware.py ${output_dir}/usr/lib/thirdreality/images/
+    chmod +x ${output_dir}/usr/lib/thirdreality/images/check_zigbee_firmware.py
+fi
+
 if [ -f "${current_dir}/upgrade_firmware.sh" ]; then
     cp ${current_dir}/upgrade_firmware.sh ${output_dir}/usr/lib/thirdreality/images/
     chmod +x ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh

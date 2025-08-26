@@ -18,7 +18,16 @@ if [ "$1" = "configure" ]; then
     # echo "Firmware upgrade service scheduled in background."
 
 elif [ "$1" = "fix-dependency" ]; then
-    echo "fix-dependency"
+    echo "Try to flash bl706 firmware and check firmware"
+    
+    if [ -f "/usr/lib/thirdreality/images/check_thread_firmware.py" ]; then
+        chmod +x /usr/lib/thirdreality/images/check_thread_firmware.py
+    fi
+
+    if [ -f "/usr/lib/thirdreality/images/check_zigbee_firmware.py" ]; then
+        chmod +x /usr/lib/thirdreality/images/check_zigbee_firmware.py
+    fi
+
     if [ -f "/usr/lib/thirdreality/images/upgrade_firmware.sh" ]; then
         /usr/lib/thirdreality/images/upgrade_firmware.sh || true
     fi

@@ -29,11 +29,7 @@ get_system_version_components() {
     sys_thread=$(echo "$t3r_version_raw" | awk -F. '{print $3}')
     sys_armbian=$(echo "$t3r_version_raw" | awk -F. '{print $4}')
     
-    # Convert to integers for comparison (remove leading zeros)
-    sys_zigbee=$(echo "$sys_zigbee" | sed 's/^0*//')
-    sys_thread=$(echo "$sys_thread" | sed 's/^0*//')
-    
-    # Set defaults if empty
+    # Keep version numbers as strings, just ensure they're not empty
     [ -z "$sys_zigbee" ] && sys_zigbee=0
     [ -z "$sys_thread" ] && sys_thread=0
     
@@ -43,8 +39,8 @@ get_system_version_components() {
 # Function to get script version components
 get_script_version_components() {
     local script_zigbee script_thread
-    script_zigbee=$(echo "$VERSION" | cut -d'.' -f2 | sed 's/^0*//')
-    script_thread=$(echo "$VERSION" | cut -d'.' -f3 | sed 's/^0*//')
+    script_zigbee=$(echo "$VERSION" | cut -d'.' -f2)
+    script_thread=$(echo "$VERSION" | cut -d'.' -f3)
     
     # Set defaults if empty
     [ -z "$script_zigbee" ] && script_zigbee=0
@@ -142,6 +138,9 @@ check_upgrade_needed() {
     script_zigbee=$(echo "$version_info" | cut -d' ' -f1)
     script_thread=$(echo "$version_info" | cut -d' ' -f2)
     
+    echo "DEBUG: Raw script version info: '$version_info'" >&2
+    echo "DEBUG: Parsed script_zigbee: '$script_zigbee', script_thread: '$script_thread'" >&2
+    
     # Get system version components
     version_info=$(get_system_version_components)
     if [ $? -ne 0 ]; then
@@ -152,27 +151,35 @@ check_upgrade_needed() {
     sys_zigbee=$(echo "$version_info" | cut -d' ' -f1)
     sys_thread=$(echo "$version_info" | cut -d' ' -f2)
     
-    echo "Script version: Zigbee=$script_zigbee, Thread=$script_thread"
-    echo "System version: Zigbee=$sys_zigbee, Thread=$sys_thread"
+    echo "DEBUG: Raw system version info: '$version_info'" >&2
+    echo "DEBUG: Parsed sys_zigbee: '$sys_zigbee', sys_thread: '$sys_thread'" >&2
+    
+    echo "Script version: Zigbee=$script_zigbee, Thread=$script_thread" >&2
+    echo "System version: Zigbee=$sys_zigbee, Thread=$sys_thread" >&2
     
     local need_zigbee_upgrade=false
     local need_thread_upgrade=false
     
     # Check if script version is higher than system version
+    echo "DEBUG: Comparing zigbee versions: script='$script_zigbee' vs system='$sys_zigbee'" >&2
+    echo "DEBUG: Zigbee comparison result: $script_zigbee -gt $sys_zigbee" >&2
     if [ "$script_zigbee" -gt "$sys_zigbee" ]; then
-        echo "Zigbee upgrade needed: script version ($script_zigbee) > system version ($sys_zigbee)"
+        echo "Zigbee upgrade needed: script version ($script_zigbee) > system version ($sys_zigbee)" >&2
         need_zigbee_upgrade=true
     else
-        echo "Zigbee upgrade not needed: script version ($script_zigbee) <= system version ($sys_zigbee)"
+        echo "Zigbee upgrade not needed: script version ($script_zigbee) <= system version ($sys_zigbee)" >&2
     fi
     
+    echo "DEBUG: Comparing thread versions: script='$script_thread' vs system='$sys_thread'" >&2
+    echo "DEBUG: Thread comparison result: $script_thread -gt $sys_thread" >&2
     if [ "$script_thread" -gt "$sys_thread" ]; then
-        echo "Thread upgrade needed: script version ($script_thread) > system version ($sys_thread)"
+        echo "Thread upgrade needed: script version ($script_thread) > system version ($sys_thread)" >&2
         need_thread_upgrade=true
     else
-        echo "Thread upgrade not needed: script version ($script_thread) <= system version ($sys_thread)"
+        echo "Thread upgrade not needed: script version ($script_thread) <= system version ($sys_thread)" >&2
     fi
     
+    # Only return the upgrade flags, no debug output here
     echo "$need_zigbee_upgrade $need_thread_upgrade"
 }
 
@@ -222,6 +229,14 @@ flash_zigbee() {
         # Execute flash command
         chmod +x $DST/bl706_func.sh
         $DST/bl706_func.sh flash zigbee
+
+        # Get BL702 info after flashing zigbee firmware
+        echo "Getting BL702 info after zigbee firmware flash..."
+        if [ -f "$SRC/check_zigbee_firmware.py" ]; then
+            python3 "$SRC/check_zigbee_firmware.py"
+        else
+            echo "Warning: check_zigbee_firmware.py not found at $SRC/check_zigbee_firmware.py"
+        fi
         
         # Restart previously stopped services
         for service in "${stopped_services[@]}"; do
@@ -281,6 +296,14 @@ flash_thread() {
         # Execute flash command
         chmod +x $DST/bl706_func.sh
         $DST/bl706_func.sh flash thread
+
+        # Get RCP version after flashing thread firmware
+        echo "Getting RCP version after thread firmware flash..."
+        if [ -f "$SRC/check_thread_firmware.py" ]; then
+            python3 "$SRC/check_thread_firmware.py"
+        else
+            echo "Warning: check_thread_firmware.py not found at $SRC/check_thread_firmware.py"
+        fi
         
         # Restart otbr-agent.service if it was running before
         if [ "$was_running" = true ]; then
@@ -324,16 +347,21 @@ else
     echo "Normal upgrade mode: checking version compatibility..."
     
     # Check if upgrade is needed
-    local upgrade_info
+    upgrade_info=
     upgrade_info=$(check_upgrade_needed)
     if [ $? -ne 0 ]; then
         echo "Error: Failed to check upgrade requirements"
         exit 1
     fi
     
-    local need_zigbee need_thread
+    echo "DEBUG: Raw upgrade_info from check_upgrade_needed: '$upgrade_info'" >&2
+    
+    need_zigbee=
+    need_thread=
     need_zigbee=$(echo "$upgrade_info" | cut -d' ' -f1)
     need_thread=$(echo "$upgrade_info" | cut -d' ' -f2)
+    
+    echo "DEBUG: Parsed upgrade flags - need_zigbee: '$need_zigbee', need_thread: '$need_thread'" >&2
     
     # Execute flash operations based on version comparison
     if [ "$need_zigbee" = "true" ]; then
