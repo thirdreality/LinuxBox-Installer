@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+remove)
+    systemctl stop zigbee2mqtt.service
+    systemctl disable zigbee2mqtt.service
+    systemctl revert zigbee2mqtt.service
+    ;;
+esac

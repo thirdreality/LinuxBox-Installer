@@ -1,0 +1,21 @@
+[Unit]
+Description=openHAB - empowering the smart home
+Documentation=https://www.openhab.org/docs/
+Documentation=https://community.openhab.org
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Environment="OPENHAB_HTTP_PORT=@CONFIG_OPENHAB_HTTP_PORT@" "OPENHAB_HTTPS_PORT=@CONFIG_OPENHAB_HTTPS_PORT@"
+User=openhab
+Group=openhab
+
+WorkingDirectory=/opt/openhab
+
+ExecStart=/opt/openhab/runtime/bin/karaf daemon
+ExecStop=/opt/openhab/runtime/bin/karaf stop
+Restart=on-failure
+SuccessExitStatus=0 143
+
+[Install]
+WantedBy=multi-user.target

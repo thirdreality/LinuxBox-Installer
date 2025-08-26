@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -e
+
+case "$1" in
+configure)
+    if ! id openhab &>/dev/null; then
+        adduser --system --no-create-home --group --disabled-login openhab
+    fi
+
+    chown -hR openhab:openhab /opt/openhab
+
+    systemctl enable openhab.service
+    ;;
+esac

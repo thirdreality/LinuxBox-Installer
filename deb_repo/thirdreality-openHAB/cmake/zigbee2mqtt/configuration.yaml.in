@@ -1,0 +1,21 @@
+version: 4
+mqtt:
+  base_topic: zigbee2mqtt
+  server: mqtt://localhost:1883
+serial:
+  port: /dev/ttyAML3
+  adapter: blz
+advanced:
+  channel: 15
+  network_key: GENERATE
+  pan_id: GENERATE
+  ext_pan_id: GENERATE
+
+frontend:
+  enabled: true
+  port: @CONFIG_Z2M_FRONTEND_PORT@
+  host: 0.0.0.0
+ota:
+  update_check_interval: 1440
+homeassistant:
+  enabled: true

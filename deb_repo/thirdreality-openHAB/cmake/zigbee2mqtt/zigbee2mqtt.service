@@ -1,0 +1,20 @@
+[Unit]
+Description=zigbee2mqtt
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Environment="NODE_ENV=production" "Z2M_WATCHDOG=default"
+Type=notify
+NotifyAccess=all
+ExecStart=node index.js
+WorkingDirectory=/opt/zigbee2mqtt
+StandardOutput=inherit
+# Or use StandardOutput=null if you don't want Zigbee2MQTT messages filling syslog, for more options see systemd.exec(5)
+StandardError=inherit
+WatchdogSec=10s
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,50 @@
+{
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "openhab",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CONFIG_OPENHAB_VERSION": {
+                    "type": "STRING",
+                    "value": "4.3.6"
+                }
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "archive",
+            "configurePreset": "openhab",
+            "targets": [
+                "archive"
+            ]
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "openhab",
+            "configurePreset": "openhab"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "openhab",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "openhab"
+                },
+                {
+                    "type": "package",
+                    "name": "openhab"
+                },
+                {
+                    "type": "build",
+                    "name": "archive"
+                }
+            ]
+        }
+    ]
+}

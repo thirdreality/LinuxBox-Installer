@@ -1,0 +1,9 @@
+packages: ["./"]
+injectWorkspacePackages: true
+supportedArchitectures:
+  os:
+    - linux
+  cpu:
+    - arm64
+  libc:
+    - glibc

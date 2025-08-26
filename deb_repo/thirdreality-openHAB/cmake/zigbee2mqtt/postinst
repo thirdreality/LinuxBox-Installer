@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+case "$1" in
+configure)
+    systemctl enable zigbee2mqtt.service
+    ;;
+esac
