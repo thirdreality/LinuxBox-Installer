@@ -175,6 +175,9 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     # homeassistant.components.hardware
     python3 -m pip install universal-silabs-flasher==0.0.30 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
     
+    # homeassistant.components.matter
+    python3 -m pip install python-matter-server==8.0.0
+
     # homeassistant.components.thread
     python3 -m pip install python-otbr-api==2.7.0 pyroute2==0.7.5
 
