@@ -59,29 +59,57 @@ def check_entity_file(file_path):
     print(file_path + " validate success")
     return
 
-def initialize_pin():
+def initialize_pin(file_path):
     # Initialize GPIO pins for Zigbee and Thread modules
-    print("Reset Zigbee module GPIOZ_1/GPIOZ_3...")
-    # Zigbee reset: DB_RSTN1/GPIOZ_1
-    # Zigbee boot: DB_BOOT1/GPIOZ_3
-    try:
-        subprocess.run(["gpioset", "0", "3=0"], check=True)
-        time.sleep(0.2)
-        subprocess.run(["gpioset", "0", "1=1"], check=True)
-        time.sleep(0.2)
-        subprocess.run(["gpioset", "0", "1=0"], check=True)
-        time.sleep(0.2)
-        subprocess.run(["gpioset", "0", "1=1"], check=True)
+    print("Checking for ZHA configuration...")
+    
+    # Check if ZHA domain exists in core.config_entries
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
             
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing Zigbee gpioset command: {e}")
-    except Exception as e:
-        print(f"Error initializing Zigbee GPIO pins: {e}")    
+            # Check if ZHA domain exists in entries
+            has_zha = False
+            if 'data' in config_data and 'entries' in config_data['data']:
+                for entry in config_data['data']['entries']:
+                    if entry.get('domain') == 'zha':
+                        has_zha = True
+                        print(f"Found ZHA configuration: {entry.get('title', 'Unknown')}")
+                        break
+            
+            if has_zha:
+                print("ZHA detected, initializing Zigbee module GPIOZ_1/GPIOZ_3...")
+                # Zigbee reset: DB_RSTN1/GPIOZ_1
+                # Zigbee boot: DB_BOOT1/GPIOZ_3
+                try:
+                    subprocess.run(["gpioset", "0", "3=0"], check=True)
+                    time.sleep(0.2)
+                    subprocess.run(["gpioset", "0", "1=1"], check=True)
+                    time.sleep(0.2)
+                    subprocess.run(["gpioset", "0", "1=0"], check=True)
+                    time.sleep(0.2)
+                    subprocess.run(["gpioset", "0", "1=1"], check=True)
+                    print("Zigbee GPIO initialization completed")
+                        
+                except subprocess.CalledProcessError as e:
+                    print(f"Error executing Zigbee gpioset command: {e}")
+                except Exception as e:
+                    print(f"Error initializing Zigbee GPIO pins: {e}")
+            else:
+                print("No ZHA configuration found, skipping GPIO initialization")
+                
+        except json.JSONDecodeError as e:
+            print(f"Error parsing config file: {e}")
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+    else:
+        print(f"Config file not found: {file_path}")
     
     return
 
 def main_run(dir):
-    initialize_pin()
+    
 
     if not dir.endswith(os.sep):
         dir += os.sep
@@ -89,6 +117,9 @@ def main_run(dir):
 
     device_file = dir + 'core.device_registry'
     entity_file = dir + 'core.entity_registry'
+    config_file = dir + 'core.config_entries'
+
+    initialize_pin(config_file)
 
     check_device_file(device_file)
     check_entity_file(entity_file)

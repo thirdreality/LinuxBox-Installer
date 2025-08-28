@@ -19,8 +19,10 @@ for venv_path in "${VENV_PATHS[@]}"; do
             echo "blz reset success"
             exit 0
         fi
-        # 可选：输出每次失败的log
-        # echo "[$venv_path] reset failed: $output"
+        # 输出每次失败的详细信息
+        echo "[$venv_path] reset failed (exit code: $ret):"
+        echo "$output"
+        echo "---"
     fi
 
 done
