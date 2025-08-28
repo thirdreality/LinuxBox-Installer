@@ -8,6 +8,7 @@ CLEAN=false
 
 #Fixed to commit
 commit_sha1="bb4252342d521736c2cdad0058ce90f54b35c75c"
+#commit_sha1="c84ba1366f841e4fdeb8fe537b2b8340f29f5417"
 
 SCRIPT="R3"
 print_info() { echo -e "\e[1;34m[${SCRIPT}] INFO:\e[0m $1"; }
