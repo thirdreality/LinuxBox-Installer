@@ -31,13 +31,13 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.6.3"
+export HOME_ASSISTANT_VERSION="2025.8.3"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20250531.4" 
+export FRONTEND_VERSION="20250811.1" 
 
-#python-matter-server==7.0.0
-export MATTER_SERVER_VERSION="8.0.0"
+#python-matter-server==8.0.0
+export MATTER_SERVER_VERSION="8.1.0"
 
 CURRENT_PLATFORM=aarch64
 
@@ -84,7 +84,6 @@ mkdir -p "${output_dir}"
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
 chip_example_url="https://github.com/home-assistant-libs/matter-linux-ota-provider/releases/download/2025.5.0"
-#chip_example_url="https://github.com/home-assistant-libs/matter-linux-ota-provider/releases/download/2024.7.2"
 
 download_file() {
     local url=$1
@@ -154,26 +153,26 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     pip3 config set install.trusted-host pypi.tuna.tsinghua.edu.cn
 
     python3 -m pip install --upgrade pip wheel
-    python3 -m pip install homeassistant=="$HOME_ASSISTANT_VERSION" home-assistant-frontend=="$FRONTEND_VERSION"
+    python3 -m pip install homeassistant=="$HOME_ASSISTANT_VERSION" 
+    python3 -m pip install home-assistant-frontend=="$FRONTEND_VERSION"
 
     # Check it https://github.com/home-assistant/core/blob/master/script/hassfest/docker/Dockerfile
     python3 -m pip install \
         stdlib-list==0.10.0 \
         pipdeptree==2.26.1 \
         tqdm==4.67.1 \
-        ruff==0.11.0 \
-        PyTurboJPEG==1.7.5 \
+        ruff==0.12.1 \
+        PyTurboJPEG==1.8.0 \
         go2rtc-client==0.2.1 \
         ha-ffmpeg==3.2.2 \
         hassil==2.2.3 \
-        home-assistant-intents==2025.6.10 \
+        home-assistant-intents==2025.7.30 \
         mutagen==1.47.0 \
         pymicro-vad==1.0.1 \
         pyspeex-noise==1.0.2
-
     # homeassistant.components.homeassistant_hardware
     # homeassistant.components.hardware
-    python3 -m pip install universal-silabs-flasher==0.0.30 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
+    python3 -m pip install universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
     
     # homeassistant.components.matter
     python3 -m pip install python-matter-server==8.0.0
@@ -182,7 +181,9 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     python3 -m pip install python-otbr-api==2.7.0 pyroute2==0.7.5
 
     # homeassistant.components.zha
-    python3 -m pip install zigpy-cli==1.1.0 zha==0.0.60
+    python3 -m pip install zha==0.0.68
+
+    python3 -m pip install zigpy-cli
 
     #cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
     cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/thirdreality/zigpy-blz/@main

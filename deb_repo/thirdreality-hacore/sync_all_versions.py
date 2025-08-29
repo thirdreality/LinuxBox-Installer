@@ -24,11 +24,6 @@ class HomeAssistantVersionSyncer:
                 "repo": "home-assistant/core",
                 "pattern": r'export HOME_ASSISTANT_VERSION="([^"]*)"'
             },
-            "frontend": {
-                "type": "github_release", 
-                "repo": "home-assistant/frontend",
-                "pattern": r'export FRONTEND_VERSION="([^"]*)"'
-            },
             "matter_server": {
                 "type": "github_release",
                 "repo": "home-assistant-libs/python-matter-server", 
@@ -49,6 +44,7 @@ class HomeAssistantVersionSyncer:
                 "type": "requirements_file",
                 "file": "requirements_all.txt", 
                 "packages": [
+                    "home-assistant-frontend",
                     "universal-silabs-flasher",
                     "ha-silabs-firmware-client",
                     "psutil-home-assistant",
@@ -116,23 +112,6 @@ class HomeAssistantVersionSyncer:
             return None
         except Exception as e:
             print(f"❌ 获取 ota-provider 版本失败: {e}")
-            return None
-
-    def get_frontend_version_from_core(self, core_version):
-        """根据 Core 版本推断前端版本"""
-        try:
-            year, month = core_version.split('.')[:2]
-            year = int(year)
-            month_int = int(month)
-            current_date = datetime.now()
-            if current_date.year == year and current_date.month == month_int:
-                day_int = current_date.day
-            else:
-                day_int = 1
-            frontend_version = f"{year}{month_int:02d}{day_int:02d}.0"
-            return frontend_version
-        except Exception as e:
-            print(f"❌ 推断前端版本失败: {e}")
             return None
 
     def get_file_content(self, version, file_path):
@@ -208,10 +187,6 @@ class HomeAssistantVersionSyncer:
             if package_info["type"] == "github_release":
                 if package_name == "home_assistant":
                     all_versions[package_name] = target_version
-                elif package_name == "frontend":
-                    frontend_version = self.get_frontend_version_from_core(target_version)
-                    if frontend_version:
-                        all_versions[package_name] = frontend_version
                 else:
                     version = self.get_github_latest_version(package_info["repo"])
                     if version:
@@ -300,7 +275,7 @@ class HomeAssistantVersionSyncer:
             
             # 更新主要版本号
             for package_name, version in versions.items():
-                if package_name in ["home_assistant", "frontend", "matter_server"]:
+                if package_name in ["home_assistant", "matter_server"]:
                     pattern = rf'export {package_name.upper()}_VERSION="([^"]*)"'
                     if re.search(pattern, updated_content):
                         updated_content = re.sub(
@@ -310,6 +285,17 @@ class HomeAssistantVersionSyncer:
                         )
                         updated_count += 1
                         print(f"✅ 已更新 {package_name.upper()}_VERSION: {version}")
+                elif package_name == "home-assistant-frontend":
+                    # 特殊处理 frontend 版本
+                    pattern = r'export FRONTEND_VERSION="([^"]*)"'
+                    if re.search(pattern, updated_content):
+                        updated_content = re.sub(
+                            pattern,
+                            f'export FRONTEND_VERSION="{version}"',
+                            updated_content
+                        )
+                        updated_count += 1
+                        print(f"✅ 已更新 FRONTEND_VERSION: {version}")
             
             # 更新 chip_example_url
             if "ota_provider" in versions:
@@ -323,7 +309,7 @@ class HomeAssistantVersionSyncer:
             
             # 更新 pip install 中的包版本
             for package_name, version in versions.items():
-                if package_name not in ["home_assistant", "frontend", "matter_server", "ota_provider", "dockerfile_package_section"]:
+                if package_name not in ["home_assistant", "home-assistant-frontend", "matter_server", "ota_provider", "dockerfile_package_section", "dockerfile_packages"]:
                     # 处理带连字符的包名
                     pip_package_name = package_name.replace('_', '-')
                     pattern = rf'{pip_package_name}==([^\s]+)'
@@ -394,9 +380,12 @@ class HomeAssistantVersionSyncer:
         print("\n📋 版本更新摘要:")
         # 主要版本
         print("  🏠 主要版本:")
-        for key in ["home_assistant", "frontend", "matter_server"]:
+        for key in ["home_assistant", "matter_server"]:
             if key in versions:
                 print(f"    {key.upper()}: {versions[key]}")
+        # Frontend 版本（从 requirements.txt 获取）
+        if "home-assistant-frontend" in versions:
+            print(f"    FRONTEND: {versions['home-assistant-frontend']}")
         # OTA Provider 版本
         if "ota_provider" in versions:
             print("  📡 OTA Provider:")
