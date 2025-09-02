@@ -7,8 +7,8 @@ REBUILD=false
 CLEAN=false
 
 #Fixed to commit
-commit_sha1="bb4252342d521736c2cdad0058ce90f54b35c75c"
-#commit_sha1="c84ba1366f841e4fdeb8fe537b2b8340f29f5417"
+#commit_sha1="bb4252342d521736c2cdad0058ce90f54b35c75c"
+commit_sha1="0700948634b85947e893a65e3d510ed870a5755b"
 
 SCRIPT="R3"
 print_info() { echo -e "\e[1;34m[${SCRIPT}] INFO:\e[0m $1"; }
@@ -32,6 +32,7 @@ version=$(grep '^Version:' ${current_dir}/DEBIAN/control | awk '{print $2}')
 print_info "Version: $version"
 
 FIREWALL_SERVICE=/etc/init.d/otbr-firewall
+NAT44_SERVICE=/etc/init.d/otbr-nat44
 
 SYSCTL_ACCEPT_RA_FILE="/etc/sysctl.d/60-otbr-accept-ra.conf"
 SYSCTL_IP_FORWARD_FILE="/etc/sysctl.d/60-otbr-ip-forward.conf"
@@ -55,9 +56,16 @@ otbr_uninstall()
         /usr/sbin/update-rc.d otbr-firewall remove || true
     fi
 
-    /usr/bin/systemctl daemon-reload
-
     test ! -f ${FIREWALL_SERVICE} || rm ${FIREWALL_SERVICE}
+
+    systemctl disable otbr-nat44 || true
+    # systemctl disable doesn't remove sym-links
+    if [ -f "/usr/sbin/update-rc.d" ]; then
+        /usr/sbin/update-rc.d otbr-nat44 remove || true
+    fi
+    test ! -f $NAT44_SERVICE || rm $NAT44_SERVICE
+
+    /usr/bin/systemctl daemon-reload
 
     test ! -f ${SYSCTL_ACCEPT_RA_FILE} || rm -v ${SYSCTL_ACCEPT_RA_FILE}
     test ! -f ${SYSCTL_IP_FORWARD_FILE} || rm -v ${SYSCTL_IP_FORWARD_FILE}
@@ -65,8 +73,10 @@ otbr_uninstall()
     echo "Restoring /etc/iproute2/rt_tables ..."
     sed -i.bak '/88\s\+openthread/d' /etc/iproute2/rt_tables
 
-    rm -rf /usr/lib/libnss_mdns.so.2
-    rm -rf /usr/lib/libdns_sd.so
+    echo "Removing file in /usr/lib/ ..."
+    rm -rf /usr/lib/libnss_mdns.so.2 || true
+    rm -rf /usr/lib/libdns_sd.so || true
+    rm -rf /usr/lib/libdns_sd.so.1 || true
 
     rm -rf /etc/rc2.d/S52mdns 
 	rm -rf /etc/rc2.d/S52mdns
@@ -171,7 +181,6 @@ if [ -f "/usr/lib/libdns_sd.so.1" ];then
     cp /usr/lib/libdns_sd.so.1 ${output_dir}/usr/lib/
 else
     echo "Error: file /usr/lib/libdns_sd.so.1 is missing!"
-    exit 1
 fi
 
 cp ${current_dir}/otbr-agent-init.sh ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
@@ -197,7 +206,6 @@ if [ -f "/usr/lib/libnss_mdns-0.2.so" ];then
     cp /usr/lib/libnss_mdns-0.2.so ${output_dir}/usr/lib/
 else
     echo "Error: file /usr/lib/libnss_mdns-0.2.so is missing!"
-    exit 1
 fi
 
 if [ -f "/usr/sbin/ot-ctl" ];then 
@@ -207,12 +215,12 @@ else
     exit 1
 fi
 
-if [ -f "/usr/sbin/mdnsd" ];then 
-    cp /usr/sbin/mdnsd ${output_dir}/usr/sbin/
-else
-    echo "Error: file /usr/sbin/mdnsd is missing!"
-    exit 1
-fi
+# if [ -f "/usr/sbin/mdnsd" ];then 
+#     cp /usr/sbin/mdnsd ${output_dir}/usr/sbin/
+# else
+#     echo "Error: file /usr/sbin/mdnsd is missing!"
+#     exit 1
+# fi
 
 if [ -f "/usr/sbin/otbr-agent" ];then 
     cp /usr/sbin/otbr-agent ${output_dir}/usr/sbin/
@@ -221,12 +229,15 @@ else
     exit 1
 fi
 
+
+
 cp /usr/bin/dns-sd ${output_dir}/usr/sbin/
 cp /usr/include/dns_sd.h ${output_dir}/usr/include/
 
 cp /etc/dbus-1/system.d/otbr-agent.conf ${output_dir}/etc/dbus-1/system.d/
 
 cp /etc/init.d/otbr-firewall ${output_dir}/etc/init.d/
+cp /etc/init.d/otbr-nat44 ${output_dir}/etc/init.d/
 cp /etc/init.d/mdns ${output_dir}/etc/init.d/
 cp /etc/default/otbr-agent ${output_dir}/etc/default/
 cp /etc/sysctl.d/60-otbr-ip-forward.conf ${output_dir}/etc/sysctl.d

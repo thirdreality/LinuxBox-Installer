@@ -103,6 +103,13 @@ if [ "$1" = "configure" ]; then
 		/usr/bin/systemctl start otbr-firewall
 	fi
 
+	if [ -f "/etc/init.d/otbr-nat44" ]; then
+		chmod a+x /etc/init.d/otbr-nat44
+		/usr/bin/systemctl enable otbr-nat44
+		/usr/bin/systemctl start otbr-nat44
+	fi
+
+
 	# accept_ra_install
     accept_ra_enable
 
