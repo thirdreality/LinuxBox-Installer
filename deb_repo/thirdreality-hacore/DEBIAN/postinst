@@ -51,6 +51,17 @@ if [ "$1" = "configure" ]; then
 		fi
 	fi
 
+	# Fix matter server vendorId
+	if [ -e "/srv/homeassistant/bin/home_assistant_matter_fix.sh" ]; then
+		chmod +x /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1
+
+		if [ -e "/var/lib/homeassistant/matter_server/chip.json" ]; then
+			/srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1 || {
+        		echo "[WARN]home_assistant_matter_fix.sh failed, but continuing..." 
+    		}
+		fi
+	fi
+
 	/usr/bin/systemctl daemon-reload
 	/usr/bin/systemctl enable home-assistant.service
 	/usr/bin/systemctl enable matter-server.service
