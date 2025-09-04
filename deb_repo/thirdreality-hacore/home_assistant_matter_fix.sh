@@ -9,7 +9,7 @@ CONFIG_DIR="/var/lib/homeassistant"
 MATTER_SERVER_DIR="$CONFIG_DIR/matter_server"
 LOG_FILE="/var/log/home_assistant_matter_fix.log"
 OLD_VENDOR_ID="65521"
-NEW_VENDOR_ID="5127"
+NEW_VENDOR_ID="4939"
 
 # Helper functions
 log() {
