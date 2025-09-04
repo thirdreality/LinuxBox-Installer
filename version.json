@@ -1,14 +1,14 @@
 {
   "channel": "stable",
   "homeassistant": {
-    "version": "2025.6.5",
+    "version": "2025.9.0",
     "python3": {
       "version": "3.13.3",
       "release": "2025.4.3"
     },
     "hacore": {
-      "version": "2025.6.5",
-      "release": "2025.6.5"
+      "version": "2025.9.0",
+      "release": "2025.9.0"
     },
     "hacore-config": {
       "version": "2025.6.3",
@@ -19,8 +19,8 @@
       "release": "2025.6.4"
     },
     "zigbee-mqtt": {
-      "version": "2.5.0",
-      "release": "2025.6.3"
+      "version": "2.6.0-dev",
+      "release": "2025.9.0"
     }
   },
   "OpenHab": {

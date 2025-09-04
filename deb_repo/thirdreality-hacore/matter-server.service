@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 Environment=PATH=/srv/matter_server/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=/bin/sleep 5
-ExecStart=/srv/matter_server/bin/matter-server --bluetooth-adapter 0 --storage-path /var/lib/homeassistant/matter_server --paa-root-cert-dir /var/lib/homeassistant/matter_server/credentials --log-file /var/lib/homeassistant/matter_server/matter_server.log
+ExecStart=/srv/matter_server/bin/matter-server --vendorid 5127 --bluetooth-adapter 0 --storage-path /var/lib/homeassistant/matter_server --paa-root-cert-dir /var/lib/homeassistant/matter_server/credentials --log-file /var/lib/homeassistant/matter_server/matter_server.log
 
 [Install]
 WantedBy=multi-user.target

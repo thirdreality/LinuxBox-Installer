@@ -31,12 +31,12 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.8.3"
+export HOME_ASSISTANT_VERSION="2025.9.0"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20250811.1" 
+export FRONTEND_VERSION="20250903.2" 
 
-#python-matter-server==8.0.0
+#python-matter-server==8.1.0
 export MATTER_SERVER_VERSION="8.1.0"
 
 CURRENT_PLATFORM=aarch64
@@ -165,23 +165,22 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         PyTurboJPEG==1.8.0 \
         go2rtc-client==0.2.1 \
         ha-ffmpeg==3.2.2 \
-        hassil==2.2.3 \
-        home-assistant-intents==2025.7.30 \
+        hassil==3.2.0 \
+        home-assistant-intents==2025.9.3 \
         mutagen==1.47.0 \
         pymicro-vad==1.0.1 \
-        pyspeex-noise==1.0.2
-    # homeassistant.components.homeassistant_hardware
+        pyspeex-noise==1.0.2    # homeassistant.components.homeassistant_hardware
     # homeassistant.components.hardware
     python3 -m pip install universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
     
     # homeassistant.components.matter
-    python3 -m pip install python-matter-server==8.0.0
+    python3 -m pip install python-matter-server==8.1.0
 
     # homeassistant.components.thread
     python3 -m pip install python-otbr-api==2.7.0 pyroute2==0.7.5
 
     # homeassistant.components.zha
-    python3 -m pip install zha==0.0.68
+    python3 -m pip install zha==0.0.70
 
     python3 -m pip install zigpy-cli
 
@@ -264,6 +263,10 @@ if [ ! -f "/usr/local/bin/zigpy_help.sh" ]; then
 fi
 
 if [ -d "${home_assistant_path}/bin" ]; then
+
+    find /srv/homeassistant -name "*.pyc" -delete
+    find /srv/homeassistant -name "__pycache__" -type d -exec rm -rf {} +
+
     cp ${current_dir}/home_assistant_init.sh ${home_assistant_path}/bin/home_assistant_init.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_init.sh
 
