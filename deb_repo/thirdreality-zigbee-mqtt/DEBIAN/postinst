@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# 中文说明： 是否离线安装，如果离线安装，则需要将包放在/usr/lib/thirdreality/archives_zigbee2mqtt目录下
+# Note: For offline installation, place packages in /usr/lib/thirdreality/archives_zigbee2mqtt directory
 
 # Constants
 DEFAULT_APT_CACHE="/var/cache/apt/archives"
@@ -13,9 +13,7 @@ LOG_FILE="/var/log/thirdreality-zigbee-mqtt-install.log"
 
 
 fix_manual_install() {
-    echo "fix manual install ..."
-    # 检查是安装还是升级
-    echo "Install zigbee2mqtt files ..."
+    echo "Installing zigbee2mqtt files..."
     
     if [[ "$(/usr/bin/systemctl is-active mosquitto.service)" == "active" ]]; then
         systemctl stop mosquitto.service >/dev/null || true
@@ -37,20 +35,27 @@ fix_manual_install() {
 case "$1" in
     configure)
         if [ -z "$2" ]; then
-            # 全新安装
+            # Fresh installation
             fix_manual_install
             if [ -d "/opt/zigbee2mqtt/data" ]; then
                 rm -rf /opt/zigbee2mqtt/data/*
             fi
+
         else
-            # 升级操作
+            # Upgrade operation
             fix_manual_install
         fi    
+
+        echo "=========================================================="
+        echo "If you manually install zigbee-mqtt.deb, please execute"
+        echo "the following script after installation:"
+        echo "/usr/lib/thirdreality/post-fix-zigbee2mqtt.sh"
+        echo "========================================================"
         
     ;;
 
     fix-dependency)
-        # Main execution
+        # Manual dependency fixing
         if [ -e "/usr/lib/thirdreality/post-fix-zigbee2mqtt.sh" ]; then
             chmod +x /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh
             /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh > /dev/null || true
