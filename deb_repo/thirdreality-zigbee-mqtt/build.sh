@@ -126,15 +126,20 @@ print_info "syncing DEBIAN ..."
 rm -rf ${output_dir}/DEBIAN > /dev/null 2>&1
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
+if [ -f "${current_dir}/zigee2mqtt_blz_reset.sh" ]; then
+    mkdir -p /opt/zigbee2mqtt/scripts/
+    cp ${current_dir}/zigee2mqtt_blz_reset.sh /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
+    chmod +x /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
+fi
 
-mkdir -p ${output_dir}/lib/thirdreality/archives
+mkdir -p ${output_dir}/lib/thirdreality/archives_zigbee2mqtt
 mkdir -p ${output_dir}/lib/thirdreality/conf
 
 print_info "Backup mosquitto debs ..."
-cp ${current_dir}/deb/mosquitto/*.deb ${output_dir}/lib/thirdreality/archives/
+cp ${current_dir}/deb/mosquitto/*.deb ${output_dir}/lib/thirdreality/archives_zigbee2mqtt/
 
 print_info "Backup nodejs debs ..."
-cp ${current_dir}/deb/nodejs/*.deb ${output_dir}/lib/thirdreality/archives/
+cp ${current_dir}/deb/nodejs/*.deb ${output_dir}/lib/thirdreality/archives_zigbee2mqtt/
 
 cp ${current_dir}/post-fix-zigbee2mqtt.sh ${output_dir}/lib/thirdreality/
 
@@ -147,6 +152,7 @@ mkdir -p ${output_dir}/opt/zigbee-herdsman
 cp /opt/zigbee-herdsman ${output_dir}/opt/ -R
 
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/database.db || true
+rm -rf ${output_dir}/opt/zigbee2mqtt/data/database.db.backup || true
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/log || true
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/state.json || true
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/configuration.yaml || true

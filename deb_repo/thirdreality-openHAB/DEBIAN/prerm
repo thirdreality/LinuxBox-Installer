@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -e
+
+# 停止服务
+if [ "$1" = "remove" ]; then
+	rm -rf /usr/share/hassio/homeassistant/zha.conf || true
+	rm -rf /usr/share/hassio/homeassistant/zha.conf.bak || true
+
+	rm -rf /var/lib/homeassistant/homeassistant/zha.conf || true
+	rm -rf /var/lib/homeassistant/homeassistant/zha.conf.bak || true
+
+    if [ -f "/lib/systemd/system/home-assistant.service" ]; then
+        systemctl stop home-assistant.service
+        systemctl disable home-assistant.service
+
+        rm -rf /lib/systemd/system/home-assistant.service
+    fi
+
+    if [ -f "/lib/systemd/system/matter-server.service" ]; then
+        systemctl stop matter-server.service
+        systemctl disable matter-server.service
+
+        rm -rf /lib/systemd/system/matter-server.service
+    fi
+
+    systemctl daemon-reload
+fi
+
+exit 0

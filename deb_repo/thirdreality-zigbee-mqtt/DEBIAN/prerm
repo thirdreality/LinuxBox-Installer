@@ -19,6 +19,10 @@ if [ "$1" = "remove" ]; then
         rm -rf /usr/bin/pnpm
     fi
 
+    if [ -d "/usr/lib/thirdreality/archives_zigbee2mqtt" ]; then
+        rm -rf /usr/lib/thirdreality/archives_zigbee2mqtt
+    fi
+    
     echo "Remove success."
 fi
 

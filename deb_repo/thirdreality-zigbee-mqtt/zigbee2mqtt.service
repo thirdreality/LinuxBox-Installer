@@ -5,6 +5,7 @@ After=network.target
 [Service]
 Environment=NODE_ENV=production
 Type=notify
+ExecStartPre=-/bin/bash -c 'if [ -f /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh ]; then /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh; fi'
 ExecStart=/usr/bin/node index.js
 WorkingDirectory=/opt/zigbee2mqtt
 StandardOutput=inherit

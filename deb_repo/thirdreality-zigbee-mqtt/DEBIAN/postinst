@@ -1,126 +1,15 @@
 #!/bin/bash
 set -e
 
-# 中文说明： 是否离线安装，如果离线安装，则需要将包放在/usr/lib/thirdreality/archives目录下
+# 中文说明： 是否离线安装，如果离线安装，则需要将包放在/usr/lib/thirdreality/archives_zigbee2mqtt目录下
 
 # Constants
 DEFAULT_APT_CACHE="/var/cache/apt/archives"
-THIRDREALITY_ARCHIVES="/usr/lib/thirdreality/archives"
+THIRDREALITY_ARCHIVES="/usr/lib/thirdreality/archives_zigbee2mqtt"
 THIRDREALITY_CONF="/lib/thirdreality/conf"
 MOSQUITTO_DIR="/etc/mosquitto"
 ZIGBEE2MQTT_DIR="/opt/zigbee2mqtt/data"
 LOG_FILE="/var/log/thirdreality-zigbee-mqtt-install.log"
-
-install_packages() {
-    echo "Installing dependencies for mosquitto and zigbee2mqtt..."
-    
-    # Define packages in the original installation order
-    local PACKAGES=(
-        "libdlt2_*.deb"
-        "libmosquitto1_*.deb"
-        "mosquitto-clients_*.deb"
-        "mosquitto_*.deb"
-        "libsystemd-dev_*.deb"
-        "nodejs_*.deb"
-    )
-    
-    # Install packages in the defined order using a for loop
-    for pkg in "${PACKAGES[@]}"; do
-        local pkg_files=(${DEFAULT_APT_CACHE}/${pkg})
-        if [ ${#pkg_files[@]} -gt 0 ] && [ -f "${pkg_files[0]}" ]; then
-            echo "Installing ${pkg}..."
-            dpkg -i ${DEFAULT_APT_CACHE}/${pkg} > /dev/null 2>&1 || true
-        else
-            echo "WARNING: No matching files found for ${pkg}"
-        fi
-    done
-    
-    # Fix any dependency issues
-    echo "Fixing dependencies..."
-    apt-get install -f -y > /dev/null 2>&1 || echo "WARNING: Some dependencies could not be fixed"
-}
-
-configure_mosquitto() {
-    if [ ! -f "/usr/bin/mosquitto_passwd" ]; then
-        echo "WARNING: mosquitto_passwd not found, skipping password setup"
-        return
-    fi
-    
-    if [ ! -d "$MOSQUITTO_DIR" ]; then
-        echo "Creating $MOSQUITTO_DIR directory"
-        mkdir -p "$MOSQUITTO_DIR"
-    fi
-    
-    # Set up password
-    echo "Setting up mosquitto password"
-    mosquitto_passwd -b -c "$MOSQUITTO_DIR/passwd" thirdreality thirdreality
-    
-    # Copy default config if available
-    if [ -f "$THIRDREALITY_CONF/mosquitto.conf.default" ]; then
-        echo "Installing mosquitto configuration"
-        cp "$THIRDREALITY_CONF/mosquitto.conf.default" "$MOSQUITTO_DIR/mosquitto.conf"
-    else
-        echo "WARNING: Default mosquitto configuration not found"
-    fi
-}
-
-configure_zigbee2mqtt() {
-    # Determine configuration file based on zha.conf radio type
-    local config_file=""
-    local zha_conf="/var/lib/homeassistant/zha.conf"
-    
-    if [ -f "$zha_conf" ]; then
-        # Read the last line to get Radio Type
-        local radio_type=$(tail -n 1 "$zha_conf" | grep -o "Radio Type: [^[:space:]]*" | cut -d' ' -f3)
-        
-        if [ "$radio_type" = "blz" ]; then
-            config_file="$THIRDREALITY_CONF/configuration_blz.yaml.default"
-            echo "Detected Radio Type: blz, using configuration_blz.yaml.default"
-        elif [ "$radio_type" = "zigate" ]; then
-            config_file="$THIRDREALITY_CONF/configuration_zigate.yaml.default"
-            echo "Detected Radio Type: zigate, using configuration_zigate.yaml.default"
-        else
-            # Default to blz if radio type is not recognized
-            config_file="$THIRDREALITY_CONF/configuration_blz.yaml.default"
-            echo "Unknown Radio Type: $radio_type, defaulting to configuration_blz.yaml.default"
-        fi
-    else
-        # Default to blz if zha.conf doesn't exist
-        config_file="$THIRDREALITY_CONF/configuration_blz.yaml.default"
-        echo "zha.conf not found, defaulting to configuration_blz.yaml.default"
-    fi
-    
-    # Check if the determined config file exists
-    if [ ! -f "$config_file" ]; then
-        echo "WARNING: Configuration file not found: $config_file"
-        return
-    fi
-    
-    if [ ! -d "$ZIGBEE2MQTT_DIR" ]; then
-        echo "Creating $ZIGBEE2MQTT_DIR directory"
-        mkdir -p "$ZIGBEE2MQTT_DIR"
-    fi
-    
-    echo "Installing zigbee2mqtt configuration from $config_file"
-    cp "$config_file" "$ZIGBEE2MQTT_DIR/configuration.yaml"
-
-    if [ -f "/usr/lib/node_modules/pnpm/bin/pnpm.cjs" ]; then
-        ln -snf /usr/lib/node_modules/pnpm/bin/pnpm.cjs /usr/bin/pnpm
-    fi    
-}
-
-stop_services() {
-    echo "Stop services for manual control"
-    systemctl stop zigbee2mqtt.service > /dev/null 2>&1 || echo "WARNING: Failed to stop zigbee2mqtt.service"
-    systemctl stop mosquitto.service > /dev/null 2>&1 || echo "WARNING: Failed to stop mosquitto.service"
-}
-
-disable_services() {
-    echo "Disabling services for manual control"
-    systemctl disable mosquitto.service > /dev/null 2>&1 || echo "WARNING: Failed to disable mosquitto.service"
-    systemctl disable zigbee2mqtt.service > /dev/null 2>&1 || echo "WARNING: Failed to disable zigbee2mqtt.service"
-}
-
 
 
 fix_manual_install() {
@@ -139,11 +28,25 @@ fix_manual_install() {
     if [ -f "/usr/lib/thirdreality/post-fix-zigbee2mqtt.sh" ]; then
         chmod +x /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh
     fi
+
+    if [ -f "/opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh" ]; then
+        chmod +x /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
+    fi
 }
 
 case "$1" in
     configure)
-        fix_manual_install
+        if [ -z "$2" ]; then
+            # 全新安装
+            fix_manual_install
+            if [ -d "/opt/zigbee2mqtt/data" ]; then
+                rm -rf /opt/zigbee2mqtt/data/*
+            fi
+        else
+            # 升级操作
+            fix_manual_install
+        fi    
+        
     ;;
 
     fix-dependency)

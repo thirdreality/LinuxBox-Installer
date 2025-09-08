@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+function info { echo -e "\e[32m[info] $*\e[39m"; }
+function warn  { echo -e "\e[33m[warn] $*\e[39m"; }
+function error { echo -e "\e[31m[error] $*\e[39m"; exit 1; }
+
+# 检查是安装还是升级
+if [ "$1" = "configure" ]; then
+	info "Install OpenHAB success."
+elif [ "$1" = "fix-dependency" ]; then
+    echo "fix-dependency"
+fi
+
+exit 0
+

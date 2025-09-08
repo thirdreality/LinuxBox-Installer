@@ -10,7 +10,7 @@ set -e
 
 # Constants
 DEFAULT_APT_CACHE="/var/cache/apt/archives"
-THIRDREALITY_ARCHIVES="/usr/lib/thirdreality/archives"
+THIRDREALITY_ARCHIVES="/usr/lib/thirdreality/archives_zigbee2mqtt"
 THIRDREALITY_CONF="/lib/thirdreality/conf"
 MOSQUITTO_DIR="/etc/mosquitto"
 ZIGBEE2MQTT_DIR="/opt/zigbee2mqtt/data"
@@ -85,8 +85,12 @@ configure_zigbee2mqtt() {
         mkdir -p "$ZIGBEE2MQTT_DIR"
     fi
     
-    log "Installing zigbee2mqtt configuration"
-    cp "$THIRDREALITY_CONF/configuration.yaml.default" "$ZIGBEE2MQTT_DIR/configuration.yaml"
+    if [ ! -f "$ZIGBEE2MQTT_DIR/configuration.yaml" ]; then
+        log "Installing zigbee2mqtt configuration"
+        cp "$THIRDREALITY_CONF/configuration.yaml.default" "$ZIGBEE2MQTT_DIR/configuration.yaml"
+    else
+        log "INFO: Default zigbee2mqtt configuration already exists"
+    fi
 
     if [ -f "/usr/lib/node_modules/pnpm/bin/pnpm.cjs" ]; then
         ln -snf /usr/lib/node_modules/pnpm/bin/pnpm.cjs /usr/bin/pnpm

@@ -1,0 +1,11 @@
+Package: thirdreality-openhab
+Version: 5.0.1
+Section: utils
+Priority: optional
+Architecture: arm64
+Maintainer: guoping <guoping.liu@3reality.com>
+Description: A custom openhab maintain package
+ A longer description of the package.
+
+
+

@@ -12,3 +12,7 @@ if [[ "$(/usr/bin/systemctl is-active zigbee2mqtt.service)" == "active" ]]; then
     echo "Stopping zigbee2mqtt.service"
     /usr/bin/systemctl stop zigbee2mqtt.service
 fi
+
+if [ -d "/usr/lib/thirdreality/archives_zigbee2mqtt" ]; then
+    rm -rf /usr/lib/thirdreality/archives_zigbee2mqtt/*
+fi

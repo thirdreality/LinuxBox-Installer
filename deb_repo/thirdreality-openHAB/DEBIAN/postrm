@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+# 停止服务
+if [ "$1" = "remove" ]; then
+
+
+fi
+
+exit 0
