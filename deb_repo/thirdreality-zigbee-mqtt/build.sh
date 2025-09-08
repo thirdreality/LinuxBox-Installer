@@ -34,6 +34,8 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf /opt/zigbee2mqtt > /dev/null 2>&1
     rm -rf /opt/zigbee-herdsman > /dev/null 2>&1
 
+    rm -rf /etc/systemd/system/zigbee2mqtt.service > /dev/null 2>&1
+
     rm -rf "${output_dir}" > /dev/null 2>&1
     rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
