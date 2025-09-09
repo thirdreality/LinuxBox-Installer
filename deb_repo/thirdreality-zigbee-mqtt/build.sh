@@ -31,6 +31,7 @@ print_info "Version: $version"
 
 #清场
 if [[ "$CLEAN" == true ]]; then
+    print_info "zigbee-mqtt_${version}.deb cleaning ..."
     rm -rf /opt/zigbee2mqtt > /dev/null 2>&1
     rm -rf /opt/zigbee-herdsman > /dev/null 2>&1
 
@@ -39,6 +40,34 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
     rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
+    # 清理 Node.js 相关文件
+    apt-get remove --purge nodejs npm -y 2>/dev/null || true
+    apt-get autoremove -y
+
+    # 手动清理残留文件
+    rm -rf /usr/bin/node
+    rm -rf /usr/bin/npm  
+    rm -rf /usr/bin/npx
+    rm -rf /usr/lib/node_modules
+    rm -rf /usr/include/node
+    rm -rf /usr/share/nodejs
+    rm -rf /etc/nodejs
+
+    # 清理 man 页面
+    rm -rf /usr/share/man/man1/node*
+    rm -rf /usr/share/man/man1/npm*
+
+    # 清理用户目录
+    rm -rf ~/.npm
+    rm -rf ~/.pnpm-store
+    rm -rf ~/.pnpm-global
+    rm -rf ~/.cache/npm
+    rm -rf ~/.cache/pnpm
+    rm -rf ~/.config/pnpm
+
+    # 更新包数据库
+    apt update
+
     exit 0
 fi
 
@@ -46,7 +75,10 @@ fi
 if [[ "$REBUILD" == true ]]; then
     print_info "zigbee-mqtt_${version}.deb rebuilding ..."
     rm -rf "${output_dir}" > /dev/null 2>&1
-
+    rm -rf ${current_dir}/*.deb > /dev/null 2>&1
+    rm -rf /opt/zigbee2mqtt > /dev/null 2>&1
+    rm -rf /opt/zigbee-herdsman > /dev/null 2>&1
+    rm -rf /etc/systemd/system/zigbee2mqtt.service > /dev/null 2>&1
 fi
 
 mkdir -p "${output_dir}"
@@ -77,12 +109,13 @@ systemctl start mosquitto.service
 
 if ! dpkg -l | grep -q "nodejs "; then
     print_info "Installing nodejs..."
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
     apt install -y nodejs libsystemd-dev   
 fi
 
 if [ ! -d "/lib/node_modules/pnpm" ]; then
-    npm install -g pnpm
+    #npm install -g pnpm
+    npm install -g pnpm@10.12.1
 fi
 
 print_info "node version should output V18.x, V20.x, V21.X, current: \e[1;31m $(node --version)\e[0m "
@@ -109,7 +142,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     git clone -b feat/blz-local-dev https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
     cd /opt/zigbee2mqtt
     rm -rf /opt/zigbee2mqtt/.git /opt/zigbee2mqtt/.github
-    pnpm install && pnpm run build
+    pnpm install --frozen-lockfile && pnpm run build
     #npm ci
     #pnpm i --frozen-lockfile
 

@@ -103,10 +103,65 @@ stop_services() {
     systemctl stop mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to stop mosquitto.service"
 }
 
+# Function to check Home Assistant integration mode
+check_ha_integration_mode() {
+    local ha_config_file="/var/lib/homeassistant/homeassistant/.storage/core.config_entries"
+    
+    if [ ! -f "$ha_config_file" ]; then
+        log "INFO: Home Assistant config file not found, defaulting to disable services"
+        return 1  # Default to disable if config not found
+    fi
+    
+    # Check if ZHA integration is enabled
+    if grep -q '"domain":"zha"' "$ha_config_file"; then
+        log "INFO: ZHA integration detected in Home Assistant config"
+        return 1  # ZHA mode - disable zigbee2mqtt services
+    fi
+    
+    # Check if MQTT integration is enabled
+    if grep -q '"domain":"mqtt"' "$ha_config_file"; then
+        log "INFO: MQTT integration detected in Home Assistant config"
+        return 0  # MQTT mode - enable zigbee2mqtt services
+    fi
+    
+    log "INFO: No ZHA or MQTT integration found, defaulting to disable services"
+    return 1  # Default to disable if neither found
+}
+
+# Function to disable services (ZHA mode)
 disable_services() {
-    log "Disabling services for manual control"
+    log "Disabling services for ZHA mode"
     systemctl disable mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to disable mosquitto.service"
     systemctl disable zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to disable zigbee2mqtt.service"
+    systemctl stop mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to stop mosquitto.service"
+    systemctl stop zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to stop zigbee2mqtt.service"
+}
+
+# Function to enable and start services (MQTT mode)
+enable_and_start_services() {
+    log "Enabling and starting services for MQTT/Zigbee2MQTT mode"
+    
+    # Enable services
+    systemctl enable mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to enable mosquitto.service"
+    systemctl enable zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to enable zigbee2mqtt.service"
+    
+    # Start services
+    systemctl start mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to start mosquitto.service"
+    sleep 2  # Wait for mosquitto to start before starting zigbee2mqtt
+    systemctl start zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to start zigbee2mqtt.service"
+    
+    # Check service status
+    if systemctl is-active --quiet mosquitto.service; then
+        log "INFO: Mosquitto service started successfully"
+    else
+        log "WARNING: Mosquitto service may not be running properly"
+    fi
+    
+    if systemctl is-active --quiet zigbee2mqtt.service; then
+        log "INFO: Zigbee2MQTT service started successfully"
+    else
+        log "WARNING: Zigbee2MQTT service may not be running properly"
+    fi
 }
 
 # Main execution
@@ -145,8 +200,16 @@ if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
     configure_zigbee2mqtt
 fi
 
-disable_services
+# Determine service action based on Home Assistant integration mode
+if check_ha_integration_mode; then
+    # MQTT integration detected - enable and start services
+    enable_and_start_services
+    log "Post-installation completed successfully - services enabled for MQTT mode"
+else
+    # ZHA integration detected or no config found - disable services
+    disable_services
+    log "Post-installation completed successfully - services disabled for ZHA mode"
+fi
 
-log "Post-installation completed successfully"
 exit 0
 
