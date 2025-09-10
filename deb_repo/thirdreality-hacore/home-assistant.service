@@ -8,6 +8,10 @@ Type=simple
 Environment=PATH=/srv/homeassistant/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=/bin/bash -c '[ -f /srv/homeassistant/bin/home_assistant_boot_check.py ] && /srv/homeassistant/bin/python3 /srv/homeassistant/bin/home_assistant_boot_check.py'
 ExecStart=/srv/homeassistant/bin/hass --config /var/lib/homeassistant/homeassistant
+Restart=on-failure
+RestartSec=15
+StartLimitInterval=300
+StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target

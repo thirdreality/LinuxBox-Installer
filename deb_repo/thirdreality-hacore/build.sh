@@ -31,10 +31,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.9.0"
+export HOME_ASSISTANT_VERSION="2025.9.1"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20250903.2" 
+export FRONTEND_VERSION="20250903.3" 
 
 #python-matter-server==8.1.0
 export MATTER_SERVER_VERSION="8.1.0"
@@ -169,8 +169,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         home-assistant-intents==2025.9.3 \
         mutagen==1.47.0 \
         pymicro-vad==1.0.1 \
-        pyspeex-noise==1.0.2    # homeassistant.components.homeassistant_hardware
-    # homeassistant.components.hardware
+        pyspeex-noise==1.0.2    # homeassistant.components.hardware
     python3 -m pip install universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
     
     # homeassistant.components.matter

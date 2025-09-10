@@ -8,6 +8,10 @@ Type=simple
 Environment=PATH=/srv/matter_server/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStartPre=/bin/sleep 5
 ExecStart=/srv/matter_server/bin/matter-server --vendorid 4939 --bluetooth-adapter 0 --storage-path /var/lib/homeassistant/matter_server --paa-root-cert-dir /var/lib/homeassistant/matter_server/credentials --log-file /var/lib/homeassistant/matter_server/matter_server.log
+Restart=on-failure
+RestartSec=15
+StartLimitInterval=300
+StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target
