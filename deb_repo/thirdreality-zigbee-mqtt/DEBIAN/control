@@ -3,5 +3,5 @@ Version: 2.6.0-dev
 Section: utils
 Priority: optional
 Architecture: arm64
-Maintainer: Your Name <guoping.liu@3reality.com>
-Description: A custom zigbee2mqtt package.
+Maintainer: guoping.liu <guoping.liu@3reality.com>
+Description: A custom zigbee2mqtt package for ThirdReality LinuxBox Dev Edition.

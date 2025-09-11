@@ -5,6 +5,7 @@ output_dir="${current_dir}/output"
 
 REBUILD=false
 CLEAN=false
+DISTCLEAN=false
 
 
 SCRIPT="R3"
@@ -20,7 +21,7 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --rebuild) REBUILD=true ;;
         --clean) CLEAN=true ;;
-        *) print_error "未知参数: $1" >&2; exit 1 ;;
+        *) print_error "Unknown argument: $1" >&2; exit 1 ;;
     esac
     shift
 done
@@ -28,23 +29,32 @@ done
 version=$(grep '^Version:' ${current_dir}/DEBIAN/control | awk '{print $2}')
 print_info "Version: $version"
 
-
-#清场
+# Full clean because Node.js may conflict with other packages
 if [[ "$CLEAN" == true ]]; then
     print_info "zigbee-mqtt_${version}.deb cleaning ..."
     rm -rf /opt/zigbee2mqtt > /dev/null 2>&1
     rm -rf /opt/zigbee-herdsman > /dev/null 2>&1
+
+    systemctl stop mosquitto.service || true
+    systemctl disable mosquitto.service || true
+
+    systemctl stop zigbee2mqtt.service || true
+    systemctl disable zigbee2mqtt.service || true
 
     rm -rf /etc/systemd/system/zigbee2mqtt.service > /dev/null 2>&1
 
     rm -rf "${output_dir}" > /dev/null 2>&1
     rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
-    # 清理 Node.js 相关文件
-    apt-get remove --purge nodejs npm -y 2>/dev/null || true
+    # Clean Node.js and mosquitto related packages
+    print_info "Cleaning mosquitto, nodejs ..."
+    apt-get remove --purge nodejs npm libsystemd-dev -y 2>/dev/null || true
+    apt-get remove --purge mosquitto mosquitto-clients libdlt2 libmosquitto1 -y 2>/dev/null || true
     apt-get autoremove -y
+    apt-get clean
 
-    # 手动清理残留文件
+    # Manually clean residual files
+    print_info "Cleaning data files ..."
     rm -rf /usr/bin/node
     rm -rf /usr/bin/npm  
     rm -rf /usr/bin/npx
@@ -53,11 +63,13 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf /usr/share/nodejs
     rm -rf /etc/nodejs
 
-    # 清理 man 页面
+    rm -rf /etc/mosquitto
+
+    # Clean man pages
     rm -rf /usr/share/man/man1/node*
     rm -rf /usr/share/man/man1/npm*
 
-    # 清理用户目录
+    # Clean user directories
     rm -rf ~/.npm
     rm -rf ~/.pnpm-store
     rm -rf ~/.pnpm-global
@@ -65,13 +77,14 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf ~/.cache/pnpm
     rm -rf ~/.config/pnpm
 
-    # 更新包数据库
+    # Update package database
     apt update
 
+    print_info "zigbee-mqtt_${version}.deb cleaning finished ..."
     exit 0
 fi
 
-#半清场
+# Partial clean
 if [[ "$REBUILD" == true ]]; then
     print_info "zigbee-mqtt_${version}.deb rebuilding ..."
     rm -rf "${output_dir}" > /dev/null 2>&1
@@ -84,25 +97,29 @@ fi
 mkdir -p "${output_dir}"
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
-# 安装软件
+# Install software
 
-# 检查：如果mosquitto-clients, 以及mosquitto没有安装， 则进行如下操作
+# Check: if mosquitto or mosquitto-clients is not installed, install them
 if ! dpkg -l | grep -q "mosquitto " || ! dpkg -l | grep -q "mosquitto-clients"; then
     print_info "Installing mosquitto and mosquitto-clients..."
     apt update
+    apt-get install --download-only mosquitto mosquitto-clients libdlt2 libmosquitto1 
     apt install -y mosquitto mosquitto-clients
-    systemctl enable mosquitto.service
     systemctl disable mosquitto.service
-    mosquitto -v
+    systemctl stop mosquitto.service
+    #mosquitto -v
 fi
 
 # post install
 
 if [ -f "/usr/bin/mosquitto_passwd" ]; then 
+    print_info "Config mosquitto and mosquitto-clients..."
+	mkdir -p /etc/mosquitto
 	rm -rf /etc/mosquitto/passwd
 	mosquitto_passwd -b -c /etc/mosquitto/passwd thirdreality thirdreality
 fi
 
+mkdir -p /etc/mosquitto
 cp ${current_dir}/mosquitto.conf /etc/mosquitto/mosquitto.conf
 
 systemctl start mosquitto.service
@@ -110,10 +127,12 @@ systemctl start mosquitto.service
 if ! dpkg -l | grep -q "nodejs "; then
     print_info "Installing nodejs..."
     curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-    apt install -y nodejs libsystemd-dev   
+    apt-get install --download-only nodejs libsystemd-dev
+    apt-get install -y nodejs libsystemd-dev   
 fi
 
 if [ ! -d "/lib/node_modules/pnpm" ]; then
+    print_info "Installing pnpm..."
     #npm install -g pnpm
     npm install -g pnpm@10.12.1
 fi
@@ -124,13 +143,31 @@ print_info "node version should output V18.x, V20.x, V21.X, current: \e[1;31m $(
 print_info "npm version should output 9.X or 10.X, current: \e[1;31m $(npm --version)\e[0m "
 #npm --version # Should output 9.X or 10.X
 
+print_info "pnpm version should output 10.X, current: \e[1;31m $(pnpm --version)\e[0m "
+
+# Create package
+print_info "Create output directory ..."
+mkdir -p "${output_dir}"
+
+print_info "syncing DEBIAN ..."
+rm -rf ${output_dir}/DEBIAN > /dev/null 2>&1
+cp ${current_dir}/DEBIAN ${output_dir}/ -R
+
 if [ ! -d "/opt/zigbee2mqtt" ]; then
     cp ${current_dir}/zigbee2mqtt.service /etc/systemd/system/zigbee2mqtt.service
 
     print_info "Build zigbee-herdsman ..."
     mkdir -p /opt/zigbee-herdsman
     git clone -b feat/blz https://github.com/fangzheli/zigbee-herdsman.git /opt/zigbee-herdsman
+
     cd /opt/zigbee-herdsman
+    dirty_id=$(/usr/bin/git describe --dirty --always)
+    print_info "zigbee-herdsman dirty-id '$dirty_id'"
+    echo "zigbee-herdsman-dirty-id: $dirty_id" >> ${output_dir}/DEBIAN/control
+    commit_id=$(git log -1 --format=%H)
+    print_info "zigbee-herdsman commit-id '$commit_id'"
+    echo "zigbee-herdsman-commit: $commit_id" >> ${output_dir}/DEBIAN/control
+
     rm -rf /opt/zigbee-herdsman/.git /opt/zigbee-herdsman/.github
     #pnpm i --frozen-lockfile
     pnpm install && pnpm run build
@@ -140,7 +177,15 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     #git clone --depth 1 https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
     #git clone -b feat/blz-local-dev https://github.com/fangzheli/zigbee2mqtt.git /opt/zigbee2mqtt
     git clone -b feat/blz-local-dev https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
+
     cd /opt/zigbee2mqtt
+    dirty_id=$(/usr/bin/git describe --dirty --always)
+    print_info "zigbee2mqtt dirty-id '$dirty_id'"
+    echo "zigbee2mqtt-dirty-id: $dirty_id" >> ${output_dir}/DEBIAN/control
+    commit_id=$(git log -1 --format=%H)
+    print_info "zigbee2mqtt commit-id '$commit_id'"
+    echo "zigbee2mqtt-commit: $commit_id" >> ${output_dir}/DEBIAN/control
+
     rm -rf /opt/zigbee2mqtt/.git /opt/zigbee2mqtt/.github
     pnpm install --frozen-lockfile && pnpm run build
     #npm ci
@@ -152,14 +197,6 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
 fi
 
 systemctl daemon-reload
-
-# 创建软件
-print_info "Create output directory ..."
-mkdir -p "${output_dir}"
-
-print_info "syncing DEBIAN ..."
-rm -rf ${output_dir}/DEBIAN > /dev/null 2>&1
-cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
 if [ -f "${current_dir}/zigee2mqtt_blz_reset.sh" ]; then
     mkdir -p /opt/zigbee2mqtt/scripts/

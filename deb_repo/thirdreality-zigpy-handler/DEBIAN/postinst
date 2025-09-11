@@ -4,6 +4,10 @@ set -e
 # 检查是安装还是升级
 if [ "$1" = "configure" ]; then
 
+    if [[ "$(/usr/bin/systemctl is-enabled home-assistant.service)" == "enabled" ]]; then
+        /usr/bin/systemctl start home-assistant.service
+    fi
+
 elif [ "$1" = "fix-dependency" ]; then
     echo "fix-dependency"
 fi

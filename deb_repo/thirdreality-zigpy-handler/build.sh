@@ -49,6 +49,8 @@ mkdir -p "${output_dir}"
 print_info "syncing DEBIAN ..."
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
+mkdir -p ${output_dir}/usr/lib/thirdreality/zha-device-handlers/
+
 
 # /srv/homeassistant/lib/python3.13/site-packages/zhaquirks/thirdreality
 

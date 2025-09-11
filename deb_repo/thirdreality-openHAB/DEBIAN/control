@@ -4,7 +4,7 @@ Section: utils
 Priority: optional
 Architecture: arm64
 Maintainer: guoping <guoping.liu@3reality.com>
-Description: A custom openhab maintain package
+Description: A custom openhab maintain package for ThirdReality LinuxBox Dev Edition.
  A longer description of the package.
 
 
