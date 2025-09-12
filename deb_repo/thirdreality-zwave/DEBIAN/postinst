@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+
+# Note: For offline installation, place packages in /usr/lib/thirdreality/archives_zigbee2mqtt directory
+
+# Constants
+DEFAULT_APT_CACHE="/var/cache/apt/archives"
+
+fix_manual_install() {
+
+}
+
+case "$1" in
+    configure)
+        if [ -z "$2" ]; then
+            # Fresh installation
+            fix_manual_install
+        else
+            # Upgrade operation
+            fix_manual_install
+        fi    
+
+        echo "=========================================================="
+        echo "If you manually install zigbee-mqtt.deb, please execute"
+        echo "the following script after installation:"
+        echo "/usr/lib/thirdreality/post-fix-zwave.sh"
+        echo "========================================================"
+        
+    ;;
+
+    fix-dependency)
+        # Manual dependency fixing
+        if [ -e "/usr/lib/thirdreality/post-fix-zwave.sh"" ]; then
+            chmod +x /usr/lib/thirdreality/post-fix-zwave.sh"
+            /usr/lib/thirdreality/post-fix-zwave.sh" > /dev/null || true
+        fi
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0
+

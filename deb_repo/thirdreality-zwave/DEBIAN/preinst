@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+if [[ "$(/usr/bin/systemctl is-active zwave-server.service)" == "active" ]]; then
+    echo "Stopping zwave-server.service"
+    /usr/bin/systemctl stop zwave-server.service
+fi
+
