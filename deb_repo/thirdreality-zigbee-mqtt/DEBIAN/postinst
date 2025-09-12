@@ -57,6 +57,7 @@ case "$1" in
     fix-dependency)
         # Manual dependency fixing
         if [ -e "/usr/lib/thirdreality/post-fix-zigbee2mqtt.sh" ]; then
+            echo "Excuting /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh ..."
             chmod +x /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh
             /usr/lib/thirdreality/post-fix-zigbee2mqtt.sh > /dev/null || true
         fi

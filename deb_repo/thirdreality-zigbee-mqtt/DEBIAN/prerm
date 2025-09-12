@@ -7,17 +7,17 @@ if [ "$1" = "remove" ]; then
     systemctl stop zigbee2mqtt.service || true
     systemctl disable zigbee2mqtt.service || true
 
-    systemctl stop mosquitto.service || true
-    systemctl disable mosquitto.service || true
+    #systemctl stop mosquitto.service || true
+    #systemctl disable mosquitto.service || true
     
     systemctl daemon-reload
 
     echo "Remove library files ..."
     rm -rf /opt/zigbee2mqtt/data/log
 
-    if [ -f "/usr/bin/pnpm" ]; then
-        rm -rf /usr/bin/pnpm
-    fi
+    #if [ -f "/usr/bin/pnpm" ]; then
+    #    rm -rf /usr/bin/pnpm
+    #fi
 
     if [ -d "/usr/lib/thirdreality/archives_zigbee2mqtt" ]; then
         rm -rf /usr/lib/thirdreality/archives_zigbee2mqtt
