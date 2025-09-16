@@ -31,10 +31,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.9.1"
+export HOME_ASSISTANT_VERSION="2025.9.3"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20250903.3" 
+export FRONTEND_VERSION="20250903.5" 
 
 #python-matter-server==8.1.0
 export MATTER_SERVER_VERSION="8.1.0"
@@ -169,8 +169,44 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         home-assistant-intents==2025.9.3 \
         mutagen==1.47.0 \
         pymicro-vad==1.0.1 \
-        pyspeex-noise==1.0.2    # homeassistant.components.hardware
+        pyspeex-noise==1.0.2    
+
+
+    #以下是一个强制换行符号
     python3 -m pip install universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
+
+    #以下是从首次启动日志中获取的，关键字：[homeassistant.util.package]
+    python3 -m pip install \
+        ha-ffmpeg==3.2.2 \
+        aiousbwatcher==1.1.1 \
+        async-upnp-client==0.45.0 \
+        aiodhcpwatcher==1.2.1 \
+        aiodiscover==2.7.1 \
+        hassil==3.2.0 \
+        home-assistant-intents==2025.9.3 \
+        mutagen==1.47.0 \
+        bleak==1.0.1 \
+        bluetooth-adapters==2.1.0 \
+        bluetooth-auto-recovery==1.5.2 \
+        pymicro-vad==1.0.1 \
+        pyspeex-noise==1.0.2 \
+        PyTurboJPEG==1.8.0 \
+        radios==0.3.2 \
+        universal-silabs-flasher==0.0.31 \
+        ha-silabs-firmware-client==0.2.0 \
+        gTTS==2.5.3 \
+        av==13.1.0 \
+        go2rtc-client==0.2.1 \
+        PyNaCl==1.5.0 \
+        aioesphomeapi==39.0.1 \
+        esphome-dashboard-api==1.3.0 \
+        bleak-esphome==3.3.0 \
+        paho-mqtt==2.1.0 \
+        aioruuvigateway==0.1.0 \
+        aioshelly==13.8.0 \
+        ibeacon-ble==1.2.0 \
+        kegtron-ble==0.4.0 \
+        xiaomi-ble==1.2.0
     
     # homeassistant.components.matter
     python3 -m pip install python-matter-server==8.1.0
