@@ -174,39 +174,6 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
 
     #以下是一个强制换行符号
     python3 -m pip install universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
-
-    #以下是从首次启动日志中获取的，关键字：[homeassistant.util.package]
-    python3 -m pip install \
-        ha-ffmpeg==3.2.2 \
-        aiousbwatcher==1.1.1 \
-        async-upnp-client==0.45.0 \
-        aiodhcpwatcher==1.2.1 \
-        aiodiscover==2.7.1 \
-        hassil==3.2.0 \
-        home-assistant-intents==2025.9.3 \
-        mutagen==1.47.0 \
-        bleak==1.0.1 \
-        bluetooth-adapters==2.1.0 \
-        bluetooth-auto-recovery==1.5.2 \
-        pymicro-vad==1.0.1 \
-        pyspeex-noise==1.0.2 \
-        PyTurboJPEG==1.8.0 \
-        radios==0.3.2 \
-        universal-silabs-flasher==0.0.31 \
-        ha-silabs-firmware-client==0.2.0 \
-        gTTS==2.5.3 \
-        av==13.1.0 \
-        go2rtc-client==0.2.1 \
-        PyNaCl==1.5.0 \
-        aioesphomeapi==39.0.1 \
-        esphome-dashboard-api==1.3.0 \
-        bleak-esphome==3.3.0 \
-        paho-mqtt==2.1.0 \
-        aioruuvigateway==0.1.0 \
-        aioshelly==13.8.0 \
-        ibeacon-ble==1.2.0 \
-        kegtron-ble==0.4.0 \
-        xiaomi-ble==1.2.0
     
     # homeassistant.components.matter
     python3 -m pip install python-matter-server==8.1.0
@@ -218,6 +185,38 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     python3 -m pip install zha==0.0.70
 
     python3 -m pip install zigpy-cli
+
+    #以下是从首次启动日志中获取的，关键字：[homeassistant.util.package]
+    python3 -m pip install ha-ffmpeg==3.2.2
+    python3 -m pip install aiousbwatcher==1.1.1
+    python3 -m pip install async-upnp-client==0.45.0
+    python3 -m pip install aiodhcpwatcher==1.2.1
+    python3 -m pip install aiodiscover==2.7.1
+    python3 -m pip install hassil==3.2.0
+    python3 -m pip install home-assistant-intents==2025.9.3
+    python3 -m pip install mutagen==1.47.0
+    python3 -m pip install bleak==1.0.1
+    python3 -m pip install bluetooth-adapters==2.1.0
+    python3 -m pip install bluetooth-auto-recovery==1.5.2
+    python3 -m pip install pymicro-vad==1.0.1
+    python3 -m pip install pyspeex-noise==1.0.2
+    python3 -m pip install PyTurboJPEG==1.8.0
+    python3 -m pip install radios==0.3.2
+    python3 -m pip install universal-silabs-flasher==0.0.31
+    python3 -m pip install ha-silabs-firmware-client==0.2.0
+    python3 -m pip install gTTS==2.5.3
+    python3 -m pip install av==13.1.0
+    python3 -m pip install go2rtc-client==0.2.1
+    python3 -m pip install PyNaCl==1.5.0
+    python3 -m pip install aioesphomeapi==39.0.1
+    python3 -m pip install esphome-dashboard-api==1.3.0
+    python3 -m pip install bleak-esphome==3.3.0
+    python3 -m pip install paho-mqtt==2.1.0
+    python3 -m pip install aioruuvigateway==0.1.0
+    python3 -m pip install aioshelly==13.8.0
+    python3 -m pip install ibeacon-ble==1.2.0
+    python3 -m pip install kegtron-ble==0.4.0
+    python3 -m pip install xiaomi-ble==1.2.0    
 
     #cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
     cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/thirdreality/zigpy-blz/@main
