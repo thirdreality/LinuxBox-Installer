@@ -368,9 +368,10 @@ class HomeAssistantVersionSyncer:
                             package_lines.append(f"        {line}")
                 
                 if package_lines:
-                    # 构建新的包安装段
+                    # 构建新的包安装段，添加一个空行
                     new_package_section = f"""    python3 -m pip install \\
-{chr(10).join(package_lines)}"""
+{chr(10).join(package_lines)}
+"""
                     
                     # 查找并替换现有的包安装部分
                     pattern = r'(    python3 -m pip install \\\n(?:        [^\n]+\n)+)'

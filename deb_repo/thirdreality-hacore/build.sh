@@ -169,7 +169,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         home-assistant-intents==2025.9.3 \
         mutagen==1.47.0 \
         pymicro-vad==1.0.1 \
-        pyspeex-noise==1.0.2    
+        pyspeex-noise==1.0.2
 
 
     #以下是一个强制换行符号
