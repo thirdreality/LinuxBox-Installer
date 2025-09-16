@@ -217,6 +217,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     python3 -m pip install ibeacon-ble==1.2.0
     python3 -m pip install kegtron-ble==0.4.0
     python3 -m pip install xiaomi-ble==1.2.0    
+    python3 -m pip install numpy==2.3.2
 
     #cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
     cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/thirdreality/zigpy-blz/@main

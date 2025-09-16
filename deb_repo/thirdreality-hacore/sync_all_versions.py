@@ -81,7 +81,8 @@ class HomeAssistantVersionSyncer:
                     "aioshelly",
                     "ibeacon-ble",
                     "kegtron-ble",
-                    "xiaomi-ble"
+                    "xiaomi-ble",
+                    "numpy"
                 ]
             }
         }
