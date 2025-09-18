@@ -170,13 +170,14 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
 
     rm -rf /opt/zigbee-herdsman/.git /opt/zigbee-herdsman/.github
     #pnpm i --frozen-lockfile
-    pnpm install && pnpm run build
+    pnpm install --no-frozen-lockfile --registry=https://mirrors.tencent.com/npm/ && pnpm run build
+    #pnpm install && pnpm run build
 
     print_info "Build zigbee2mqtt ..."
     mkdir -p /opt/zigbee2mqtt
     #git clone --depth 1 https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
-    #git clone -b feat/blz-local-dev https://github.com/fangzheli/zigbee2mqtt.git /opt/zigbee2mqtt
-    git clone -b feat/blz-local-dev https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
+    git clone -b feat/blz-local-dev https://github.com/fangzheli/zigbee2mqtt.git /opt/zigbee2mqtt
+    #git clone -b feat/blz-local-dev https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
 
     cd /opt/zigbee2mqtt
     dirty_id=$(/usr/bin/git describe --dirty --always)
@@ -187,13 +188,30 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     echo "zigbee2mqtt-commit: $commit_id" >> ${output_dir}/DEBIAN/control
 
     rm -rf /opt/zigbee2mqtt/.git /opt/zigbee2mqtt/.github
-    pnpm install --frozen-lockfile && pnpm run build
+    #pnpm install --frozen-lockfile && pnpm run build
+    pnpm install --no-frozen-lockfile --registry=https://mirrors.tencent.com/npm/ && pnpm run build
     #npm ci
     #pnpm i --frozen-lockfile
 
     cp ${current_dir}/configuration_zigate.yaml /opt/zigbee2mqtt/data/configuration_zigate.yaml
     cp ${current_dir}/configuration_blz.yaml /opt/zigbee2mqtt/data/configuration_blz.yaml
     #npm run build
+else
+    cd /opt/zigbee-herdsman
+    dirty_id=$(/usr/bin/git describe --dirty --always)
+    print_info "zigbee-herdsman dirty-id '$dirty_id'"
+    echo "zigbee-herdsman-dirty-id: $dirty_id" >> ${output_dir}/DEBIAN/control
+    commit_id=$(git log -1 --format=%H)
+    print_info "zigbee-herdsman commit-id '$commit_id'"
+    echo "zigbee-herdsman-commit: $commit_id" >> ${output_dir}/DEBIAN/control
+
+    cd /opt/zigbee2mqtt
+    dirty_id=$(/usr/bin/git describe --dirty --always)
+    print_info "zigbee2mqtt dirty-id '$dirty_id'"
+    echo "zigbee2mqtt-dirty-id: $dirty_id" >> ${output_dir}/DEBIAN/control
+    commit_id=$(git log -1 --format=%H)
+    print_info "zigbee2mqtt commit-id '$commit_id'"
+    echo "zigbee2mqtt-commit: $commit_id" >> ${output_dir}/DEBIAN/control        
 fi
 
 systemctl daemon-reload
