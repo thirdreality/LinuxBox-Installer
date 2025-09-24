@@ -31,13 +31,13 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.9.3"
+export HOME_ASSISTANT_VERSION="2025.9.4"
 
 #home-assistant-frontend==20250509.0
 export FRONTEND_VERSION="20250903.5" 
 
 #python-matter-server==8.1.0
-export MATTER_SERVER_VERSION="8.1.0"
+export MATTER_SERVER_VERSION="8.1.1"
 
 CURRENT_PLATFORM=aarch64
 
@@ -83,7 +83,7 @@ mkdir -p "${output_dir}"
 
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
-chip_example_url="https://github.com/home-assistant-libs/matter-linux-ota-provider/releases/download/2025.5.0"
+chip_example_url="https://github.com/home-assistant-libs/matter-linux-ota-provider/releases/download/2025.9.0"
 
 download_file() {
     local url=$1
@@ -197,7 +197,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     python3 -m pip install mutagen==1.47.0
     python3 -m pip install bleak==1.0.1
     python3 -m pip install bluetooth-adapters==2.1.0
-    python3 -m pip install bluetooth-auto-recovery==1.5.2
+    python3 -m pip install bluetooth-auto-recovery==1.5.3
     python3 -m pip install pymicro-vad==1.0.1
     python3 -m pip install pyspeex-noise==1.0.2
     python3 -m pip install PyTurboJPEG==1.8.0
