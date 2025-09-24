@@ -7,16 +7,16 @@
       "release": "2025.4.3"
     },
     "hacore": {
-      "version": "2025.9.0",
+      "version": "2025.9.4",
       "release": "2025.9.0"
     },
     "hacore-config": {
-      "version": "2025.6.3",
-      "release": "2025.6.3"
+      "version": "2025.9.0",
+      "release": "2025.9.0"
     },
     "otbr-agent": {
-      "version": "2025.07.21",
-      "release": "2025.6.4"
+      "version": "2025.08.25",
+      "release": "2025.6.7"
     },
     "zigbee-mqtt": {
       "version": "2.6.0-dev",
@@ -24,6 +24,6 @@
     }
   },
   "OpenHab": {
-    "version": "2025.4.0"
+    "version": "2025.5.0"
   }
 }
