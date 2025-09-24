@@ -41,8 +41,7 @@
         "name": "Read Only"
       }
     ],
-    "credentials": [
-    ],
+    "credentials": [],
     "refresh_tokens": [
       {
         "id": "a95ffd7ae33e4f299a407956f4f7193e",

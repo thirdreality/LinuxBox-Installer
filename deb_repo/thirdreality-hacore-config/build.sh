@@ -2,7 +2,7 @@
 
 current_dir=$(pwd)
 output_dir="${current_dir}/output"
-config_dir="/var/lib/"
+config_dir="/var/lib/homeassistant"
 
 REBUILD=false
 CLEAN=false
@@ -50,15 +50,11 @@ if [[ "$REBUILD" == true ]]; then
 
     rm -rf ${output_dir}/var > /dev/null 2>&1
     rm -rf ${output_dir}/etc > /dev/null 2>&1
-
     rm -rf "${output_dir}" > /dev/null 2>&1
-    rm -rf "${config_dir}" > /dev/null 2>&1
 
-    mkdir -p "${output_dir}"
-    mkdir -p "${config_dir}"
+    mkdir -p "${output_dir}" > /dev/null 2>&1
 
-    cp ${current_dir}/DEBIAN ${output_dir}/ -R
-    cp ${current_dir}/homeassistant/*  "${config_dir}/" -R
+    rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 fi
 
 print_info "Create output directory ..."
@@ -69,8 +65,14 @@ print_info "syncing DEBIAN ..."
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
 if [ ! -d "${config_dir}/homeassistant" ]; then
-    print_info "Copying homeassistant files to ${config_dir} ..."
-    cp ${current_dir}/homeassistant  "${config_dir}/" -R
+    print_info "Installing homeassistant files to ${config_dir} ..."
+    cp ${current_dir}/homeassistant/homeassistant  "${config_dir}/" -R
+    cp ${current_dir}/homeassistant/matter_server  "${config_dir}/" -R
+fi
+
+if [ ! -d "${config_dir}/matter_server" ]; then
+    print_info "Installing matter_server files to ${config_dir} ..."
+    cp ${current_dir}/homeassistant/matter_server  "${config_dir}/" -R
 fi
 
 if [ ! -d "${output_dir}/var/lib/homeassistant" ]; then
@@ -88,8 +90,6 @@ if [ ! -d "${output_dir}/var/lib/homeassistant" ]; then
     print_info "Copying homeassistant files from ${config_dir} to ${output_dir} ..."
 
     cp ${current_dir}/homeassistant ${output_dir}/var/lib/ -R
-    #cp ${config_dir}/homeassistant ${output_dir}/var/lib/ -R
-    #rm -rf ${output_dir}/var/lib/homeassistant/homeassistant/.HA_VERSION
     echo $version > ${output_dir}/var/lib/homeassistant/homeassistant/.HA_VERSION
 
     if [ -f "/etc/hassio.json" ]; then
