@@ -248,7 +248,9 @@ if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
             log "INFO: Default zigbee2mqtt configuration already exists"
         fi
         # Standalone mode - enable and start services
-        enable_zigbee2mqtt_disable_mosquitto
+        # Start the local MQTT service to ensure zigbee2mqtt can start;
+        # if connecting to the MQTT server fails, zigbee2mqtt will fail to start
+        enable_and_start_services
         log "Post-installation completed successfully - services enabled for standalone mode"
     else
         # hacore is installed - check Home Assistant integration mode
