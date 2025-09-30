@@ -142,8 +142,7 @@ check_hacore_installed() {
 
 # Function to disable services (ZHA mode)
 disable_services() {
-    log "Disabling services for ZHA mode"
-    systemctl disable mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to disable mosquitto.service"
+    log "Disabling zigbee2mqtt service for ZHA mode (keeping mosquitto running)"
     systemctl disable zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to disable zigbee2mqtt.service"
     systemctl stop mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to stop mosquitto.service"
     systemctl stop zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to stop zigbee2mqtt.service"
@@ -176,31 +175,6 @@ enable_and_start_services() {
     fi
 }
 
-# Function to enable zigbee2mqtt and disable mosquitto (for external MQTT broker)
-enable_zigbee2mqtt_disable_mosquitto() {
-    log "Enabling zigbee2mqtt and disabling mosquitto for external MQTT broker mode"
-    
-    # Disable and stop mosquitto service
-    systemctl disable mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to disable mosquitto.service"
-    systemctl stop mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to stop mosquitto.service"
-    
-    # Enable and start zigbee2mqtt service
-    systemctl enable zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to enable zigbee2mqtt.service"
-    systemctl start zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to start zigbee2mqtt.service"
-    
-    # Check service status
-    if systemctl is-active --quiet zigbee2mqtt.service; then
-        log "INFO: Zigbee2MQTT service started successfully"
-    else
-        log "WARNING: Zigbee2MQTT service may not be running properly"
-    fi
-    
-    if ! systemctl is-active --quiet mosquitto.service; then
-        log "INFO: Mosquitto service stopped successfully"
-    else
-        log "WARNING: Mosquitto service may still be running"
-    fi
-}
 
 # Main execution
 if [ ! -d "$THIRDREALITY_ARCHIVES" ]; then
