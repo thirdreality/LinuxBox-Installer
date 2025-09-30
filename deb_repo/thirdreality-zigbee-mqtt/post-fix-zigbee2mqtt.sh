@@ -128,6 +128,18 @@ check_ha_integration_mode() {
     return 1  # Default to disable if neither found
 }
 
+# Function to check if thirdreality-hacore is installed
+check_hacore_installed() {
+    # Check if thirdreality-hacore package is installed
+    if dpkg -l | grep -q "^ii.*thirdreality-hacore"; then
+        log "INFO: thirdreality-hacore is installed"
+        return 0  # hacore is installed
+    else
+        log "INFO: thirdreality-hacore is not installed - standalone mode"
+        return 1  # hacore is not installed
+    fi
+}
+
 # Function to disable services (ZHA mode)
 disable_services() {
     log "Disabling services for ZHA mode"
@@ -161,6 +173,32 @@ enable_and_start_services() {
         log "INFO: Zigbee2MQTT service started successfully"
     else
         log "WARNING: Zigbee2MQTT service may not be running properly"
+    fi
+}
+
+# Function to enable zigbee2mqtt and disable mosquitto (for external MQTT broker)
+enable_zigbee2mqtt_disable_mosquitto() {
+    log "Enabling zigbee2mqtt and disabling mosquitto for external MQTT broker mode"
+    
+    # Disable and stop mosquitto service
+    systemctl disable mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to disable mosquitto.service"
+    systemctl stop mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to stop mosquitto.service"
+    
+    # Enable and start zigbee2mqtt service
+    systemctl enable zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to enable zigbee2mqtt.service"
+    systemctl start zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to start zigbee2mqtt.service"
+    
+    # Check service status
+    if systemctl is-active --quiet zigbee2mqtt.service; then
+        log "INFO: Zigbee2MQTT service started successfully"
+    else
+        log "WARNING: Zigbee2MQTT service may not be running properly"
+    fi
+    
+    if ! systemctl is-active --quiet mosquitto.service; then
+        log "INFO: Mosquitto service stopped successfully"
+    else
+        log "WARNING: Mosquitto service may still be running"
     fi
 }
 
@@ -200,15 +238,30 @@ if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
     configure_zigbee2mqtt
 fi
 
-# Determine service action based on Home Assistant integration mode
-if check_ha_integration_mode; then
-    # MQTT integration detected - enable and start services
-    enable_and_start_services
-    log "Post-installation completed successfully - services enabled for MQTT mode"
-else
-    # ZHA integration detected or no config found - disable services
-    disable_services
-    log "Post-installation completed successfully - services disabled for ZHA mode"
+if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
+    # Determine service action based on thirdreality-hacore installation and Home Assistant integration mode
+    if ! check_hacore_installed; then
+        if [ ! -f "$ZIGBEE2MQTT_DIR/configuration.yaml" ]; then
+            log "Installing zigbee2mqtt configuration"
+            cp "$THIRDREALITY_CONF/configuration_blz.yaml.default" "$ZIGBEE2MQTT_DIR/configuration.yaml"
+        else
+            log "INFO: Default zigbee2mqtt configuration already exists"
+        fi
+        # Standalone mode - enable and start services
+        enable_zigbee2mqtt_disable_mosquitto
+        log "Post-installation completed successfully - services enabled for standalone mode"
+    else
+        # hacore is installed - check Home Assistant integration mode
+        if check_ha_integration_mode; then
+            # MQTT integration detected - enable and start services
+            enable_and_start_services
+            log "Post-installation completed successfully - services enabled for MQTT mode"
+        else
+            # ZHA integration detected or no config found - disable services
+            disable_services
+            log "Post-installation completed successfully - services disabled for ZHA mode"
+        fi
+    fi
 fi
 
 exit 0

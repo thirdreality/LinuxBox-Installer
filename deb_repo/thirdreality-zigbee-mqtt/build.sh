@@ -261,6 +261,7 @@ cp /etc/systemd/system/zigbee2mqtt.service ${output_dir}/etc/systemd/system/zigb
 print_info "backup default config files..."
 cp ${current_dir}/configuration_zigate.yaml ${output_dir}/lib/thirdreality/conf/configuration_zigate.yaml.default
 cp ${current_dir}/configuration_blz.yaml ${output_dir}/lib/thirdreality/conf/configuration_blz.yaml.default
+#cp ${current_dir}/configuration_standalone.yaml ${output_dir}/lib/thirdreality/conf/configuration_standalone.yaml.default
 
 cp ${current_dir}/mosquitto.conf ${output_dir}/lib/thirdreality/conf/mosquitto.conf.default
 
