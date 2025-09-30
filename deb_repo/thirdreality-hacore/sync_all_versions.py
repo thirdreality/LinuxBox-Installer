@@ -82,7 +82,11 @@ class HomeAssistantVersionSyncer:
                     "ibeacon-ble",
                     "kegtron-ble",
                     "xiaomi-ble",
-                    "numpy"
+                    "numpy",
+                    "pyotp",
+                    "PyQRCode",
+                    "pyatv",
+                    "PySwitchbot"
                 ]
             }
         }

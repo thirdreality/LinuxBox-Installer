@@ -119,9 +119,11 @@ if [[ "$CURRENT_PYTHON" < "3.13.0" ]]; then
     exit 1
 fi
 
+UV_INSTALLED_COMMAND="python3 -m pip install"
 if command -v uv >/dev/null 2>&1; then
     UV_INSTALLED=true
     echo "uv 已安装，版本: $(uv --version)"
+    UV_INSTALLED_COMMAND="uv pip install"
 else
     UV_INSTALLED=false
     echo "uv 未安装或不在 PATH 中"
@@ -149,15 +151,20 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${python3_dir}/bin/python3 -m venv .
     source ${home_assistant_path}/bin/activate
 
-    pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
-    pip3 config set install.trusted-host pypi.tuna.tsinghua.edu.cn
+    if [ $UV_INSTALLED == false ]; then
+        pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+        pip3 config set install.trusted-host pypi.tuna.tsinghua.edu.cn
+    else
+        export UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+    fi
 
-    python3 -m pip install --upgrade pip wheel
-    python3 -m pip install homeassistant=="$HOME_ASSISTANT_VERSION" 
-    python3 -m pip install home-assistant-frontend=="$FRONTEND_VERSION"
+    ${UV_INSTALLED_COMMAND} --upgrade pip wheel
+
+    ${UV_INSTALLED_COMMAND} homeassistant=="$HOME_ASSISTANT_VERSION" 
+    ${UV_INSTALLED_COMMAND} home-assistant-frontend=="$FRONTEND_VERSION"
 
     # Check it https://github.com/home-assistant/core/blob/master/script/hassfest/docker/Dockerfile
-    python3 -m pip install \
+    ${UV_INSTALLED_COMMAND} \
         stdlib-list==0.10.0 \
         pipdeptree==2.26.1 \
         tqdm==4.67.1 \
@@ -173,54 +180,58 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
 
 
     #以下是一个强制换行符号
-    python3 -m pip install universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
+    ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
     
     # homeassistant.components.matter
-    python3 -m pip install python-matter-server==8.1.0
+    ${UV_INSTALLED_COMMAND} python-matter-server==8.1.0
 
     # homeassistant.components.thread
-    python3 -m pip install python-otbr-api==2.7.0 pyroute2==0.7.5
+    ${UV_INSTALLED_COMMAND} python-otbr-api==2.7.0 pyroute2==0.7.5
 
     # homeassistant.components.zha
-    python3 -m pip install zha==0.0.70
+    ${UV_INSTALLED_COMMAND} zha==0.0.70
 
-    python3 -m pip install zigpy-cli
+    ${UV_INSTALLED_COMMAND} zigpy-cli
 
     #以下是从首次启动日志中获取的，关键字：[homeassistant.util.package]
-    python3 -m pip install ha-ffmpeg==3.2.2
-    python3 -m pip install aiousbwatcher==1.1.1
-    python3 -m pip install async-upnp-client==0.45.0
-    python3 -m pip install aiodhcpwatcher==1.2.1
-    python3 -m pip install aiodiscover==2.7.1
-    python3 -m pip install hassil==3.2.0
-    python3 -m pip install home-assistant-intents==2025.9.3
-    python3 -m pip install mutagen==1.47.0
-    python3 -m pip install bleak==1.0.1
-    python3 -m pip install bluetooth-adapters==2.1.0
-    python3 -m pip install bluetooth-auto-recovery==1.5.3
-    python3 -m pip install pymicro-vad==1.0.1
-    python3 -m pip install pyspeex-noise==1.0.2
-    python3 -m pip install PyTurboJPEG==1.8.0
-    python3 -m pip install radios==0.3.2
-    python3 -m pip install universal-silabs-flasher==0.0.31
-    python3 -m pip install ha-silabs-firmware-client==0.2.0
-    python3 -m pip install gTTS==2.5.3
-    python3 -m pip install av==13.1.0
-    python3 -m pip install go2rtc-client==0.2.1
-    python3 -m pip install PyNaCl==1.5.0
-    python3 -m pip install aioesphomeapi==39.0.1
-    python3 -m pip install esphome-dashboard-api==1.3.0
-    python3 -m pip install bleak-esphome==3.3.0
-    python3 -m pip install paho-mqtt==2.1.0
-    python3 -m pip install aioruuvigateway==0.1.0
-    python3 -m pip install aioshelly==13.8.0
-    python3 -m pip install ibeacon-ble==1.2.0
-    python3 -m pip install kegtron-ble==0.4.0
-    python3 -m pip install xiaomi-ble==1.2.0    
-    python3 -m pip install numpy==2.3.2
+    ${UV_INSTALLED_COMMAND} ha-ffmpeg==3.2.2
+    ${UV_INSTALLED_COMMAND} aiousbwatcher==1.1.1
+    ${UV_INSTALLED_COMMAND} async-upnp-client==0.45.0
+    ${UV_INSTALLED_COMMAND} aiodhcpwatcher==1.2.1
+    ${UV_INSTALLED_COMMAND} aiodiscover==2.7.1
+    ${UV_INSTALLED_COMMAND} hassil==3.2.0
+    ${UV_INSTALLED_COMMAND} home-assistant-intents==2025.9.3
+    ${UV_INSTALLED_COMMAND} mutagen==1.47.0
+    ${UV_INSTALLED_COMMAND} bleak==1.0.1
+    ${UV_INSTALLED_COMMAND} bluetooth-adapters==2.1.0
+    ${UV_INSTALLED_COMMAND} bluetooth-auto-recovery==1.5.3
+    ${UV_INSTALLED_COMMAND} pymicro-vad==1.0.1
+    ${UV_INSTALLED_COMMAND} pyspeex-noise==1.0.2
+    ${UV_INSTALLED_COMMAND} PyTurboJPEG==1.8.0
+    ${UV_INSTALLED_COMMAND} radios==0.3.2
+    ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.0.31
+    ${UV_INSTALLED_COMMAND} ha-silabs-firmware-client==0.2.0
+    ${UV_INSTALLED_COMMAND} gTTS==2.5.3
+    ${UV_INSTALLED_COMMAND} av==13.1.0
+    ${UV_INSTALLED_COMMAND} go2rtc-client==0.2.1
+    ${UV_INSTALLED_COMMAND} PyNaCl==1.5.0
+    ${UV_INSTALLED_COMMAND} aioesphomeapi==39.0.1
+    ${UV_INSTALLED_COMMAND} esphome-dashboard-api==1.3.0
+    ${UV_INSTALLED_COMMAND} bleak-esphome==3.3.0
+    ${UV_INSTALLED_COMMAND} paho-mqtt==2.1.0
+    ${UV_INSTALLED_COMMAND} aioruuvigateway==0.1.0
+    ${UV_INSTALLED_COMMAND} aioshelly==13.8.0
+    ${UV_INSTALLED_COMMAND} ibeacon-ble==1.2.0
+    ${UV_INSTALLED_COMMAND} kegtron-ble==0.4.0
+    ${UV_INSTALLED_COMMAND} xiaomi-ble==1.2.0    
+    ${UV_INSTALLED_COMMAND} numpy==2.3.2
+    ${UV_INSTALLED_COMMAND} pyotp==2.8.0
+    ${UV_INSTALLED_COMMAND} PyQRCode==1.2.1
+    ${UV_INSTALLED_COMMAND} pyatv==0.16.1
+    ${UV_INSTALLED_COMMAND} PySwitchbot==0.69.0
 
     #cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
-    cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/thirdreality/zigpy-blz/@main
+    cd ${home_assistant_path}/lib64/python3.13/site-packages; ${UV_INSTALLED_COMMAND} git+https://github.com/thirdreality/zigpy-blz/@main
 
     
     # Apply patches
@@ -277,10 +288,15 @@ if [ ! -e "${matter_server_path}/bin/matter-server" ]; then
     ${python3_dir}/bin/python3 -m venv .
     source ${matter_server_path}/bin/activate
 
-    pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
-    pip3 config set install.trusted-host pypi.tuna.tsinghua.edu.cn
+    if [ $UV_INSTALLED == false ]; then
+        pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+        pip3 config set install.trusted-host pypi.tuna.tsinghua.edu.cn
+    else
+        export UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+    fi
 
-    python3 -m pip install python-matter-server[server]=="$MATTER_SERVER_VERSION"
+
+    ${UV_INSTALLED_COMMAND} python-matter-server[server]=="$MATTER_SERVER_VERSION"
 
     deactivate
 fi
