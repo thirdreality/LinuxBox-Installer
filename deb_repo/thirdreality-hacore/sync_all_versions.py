@@ -86,7 +86,12 @@ class HomeAssistantVersionSyncer:
                     "pyotp",
                     "PyQRCode",
                     "pyatv",
-                    "PySwitchbot"
+                    "PySwitchbot",
+                    "cached-ipaddress",
+                    "bluetooth-data-tools",
+                    "dbus-fast",
+                    "habluetooth",
+                    "file-read-backwards"
                 ]
             }
         }

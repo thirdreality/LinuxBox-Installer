@@ -31,10 +31,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.9.4"
+export HOME_ASSISTANT_VERSION="2025.10.1"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20250903.5" 
+export FRONTEND_VERSION="20251001.0" 
 
 #python-matter-server==8.1.0
 export MATTER_SERVER_VERSION="8.1.1"
@@ -173,14 +173,14 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         go2rtc-client==0.2.1 \
         ha-ffmpeg==3.2.2 \
         hassil==3.2.0 \
-        home-assistant-intents==2025.9.3 \
+        home-assistant-intents==2025.10.1 \
         mutagen==1.47.0 \
         pymicro-vad==1.0.1 \
         pyspeex-noise==1.0.2
 
 
     #以下是一个强制换行符号
-    ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.0.31 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
+    ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.0.35 ha-silabs-firmware-client==0.2.0 psutil-home-assistant==0.0.1
     
     # homeassistant.components.matter
     ${UV_INSTALLED_COMMAND} python-matter-server==8.1.0
@@ -189,7 +189,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${UV_INSTALLED_COMMAND} python-otbr-api==2.7.0 pyroute2==0.7.5
 
     # homeassistant.components.zha
-    ${UV_INSTALLED_COMMAND} zha==0.0.70
+    ${UV_INSTALLED_COMMAND} zha==0.0.73
 
     ${UV_INSTALLED_COMMAND} zigpy-cli
 
@@ -200,7 +200,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${UV_INSTALLED_COMMAND} aiodhcpwatcher==1.2.1
     ${UV_INSTALLED_COMMAND} aiodiscover==2.7.1
     ${UV_INSTALLED_COMMAND} hassil==3.2.0
-    ${UV_INSTALLED_COMMAND} home-assistant-intents==2025.9.3
+    ${UV_INSTALLED_COMMAND} home-assistant-intents==2025.10.1
     ${UV_INSTALLED_COMMAND} mutagen==1.47.0
     ${UV_INSTALLED_COMMAND} bleak==1.0.1
     ${UV_INSTALLED_COMMAND} bluetooth-adapters==2.1.0
@@ -209,26 +209,31 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${UV_INSTALLED_COMMAND} pyspeex-noise==1.0.2
     ${UV_INSTALLED_COMMAND} PyTurboJPEG==1.8.0
     ${UV_INSTALLED_COMMAND} radios==0.3.2
-    ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.0.31
+    ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.0.35
     ${UV_INSTALLED_COMMAND} ha-silabs-firmware-client==0.2.0
     ${UV_INSTALLED_COMMAND} gTTS==2.5.3
     ${UV_INSTALLED_COMMAND} av==13.1.0
     ${UV_INSTALLED_COMMAND} go2rtc-client==0.2.1
-    ${UV_INSTALLED_COMMAND} PyNaCl==1.5.0
-    ${UV_INSTALLED_COMMAND} aioesphomeapi==39.0.1
+    ${UV_INSTALLED_COMMAND} PyNaCl==1.6.0
+    ${UV_INSTALLED_COMMAND} aioesphomeapi==41.11.0
     ${UV_INSTALLED_COMMAND} esphome-dashboard-api==1.3.0
     ${UV_INSTALLED_COMMAND} bleak-esphome==3.3.0
     ${UV_INSTALLED_COMMAND} paho-mqtt==2.1.0
     ${UV_INSTALLED_COMMAND} aioruuvigateway==0.1.0
-    ${UV_INSTALLED_COMMAND} aioshelly==13.8.0
+    ${UV_INSTALLED_COMMAND} aioshelly==13.10.0
     ${UV_INSTALLED_COMMAND} ibeacon-ble==1.2.0
     ${UV_INSTALLED_COMMAND} kegtron-ble==0.4.0
     ${UV_INSTALLED_COMMAND} xiaomi-ble==1.2.0    
     ${UV_INSTALLED_COMMAND} numpy==2.3.2
-    ${UV_INSTALLED_COMMAND} pyotp==2.8.0
+    ${UV_INSTALLED_COMMAND} pyotp==2.9.0
     ${UV_INSTALLED_COMMAND} PyQRCode==1.2.1
     ${UV_INSTALLED_COMMAND} pyatv==0.16.1
-    ${UV_INSTALLED_COMMAND} PySwitchbot==0.69.0
+    ${UV_INSTALLED_COMMAND} PySwitchbot==0.71.0
+    ${UV_INSTALLED_COMMAND} cached-ipaddress==0.10.0
+    ${UV_INSTALLED_COMMAND} bluetooth-data-tools==1.28.2
+    ${UV_INSTALLED_COMMAND} dbus-fast==2.44.3
+    ${UV_INSTALLED_COMMAND} habluetooth==5.6.4
+    ${UV_INSTALLED_COMMAND} file-read-backwards==2.0.0
 
     #cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
     cd ${home_assistant_path}/lib64/python3.13/site-packages; ${UV_INSTALLED_COMMAND} git+https://github.com/thirdreality/zigpy-blz/@main
