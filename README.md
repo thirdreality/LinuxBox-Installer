@@ -17,3 +17,7 @@ Official Document: [Jump to home-assistant.io](https://www.home-assistant.io/ins
 
 To to continue ...
 
+
+## Latest version
+
+[Latest debs version list](https://github.com/thirdreality/LinuxBox-Installer/blob/main/latest.md)
