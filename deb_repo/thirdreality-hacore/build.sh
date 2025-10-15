@@ -41,7 +41,7 @@ export MATTER_SERVER_VERSION="8.1.1"
 
 CURRENT_PLATFORM=aarch64
 
-version=$(grep '^Version:' ${current_dir}/DEBIAN/control | awk '{print $2}')
+version=$(grep '^Version:' ${current_dir}/prebuild/DEBIAN/control | awk '{print $2}')
 print_info "Version: $version"
 
 if [[ "$CLEAN" == true ]]; then
@@ -81,7 +81,7 @@ fi
 
 mkdir -p "${output_dir}"
 
-cp ${current_dir}/DEBIAN ${output_dir}/ -R
+cp ${current_dir}/prebuild/DEBIAN ${output_dir}/ -R
 
 chip_example_url="https://github.com/home-assistant-libs/matter-linux-ota-provider/releases/download/2025.9.0"
 
@@ -243,10 +243,10 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     print_info "Applying patches..."
     
     # Apply zha.patch
-    if [ -f "${current_dir}/zha.patch" ]; then
+    if [ -f "${current_dir}/prebuild/zha.patch" ]; then
         print_info "Applying zha.patch to const.py..."
         if [ -f "${home_assistant_path}/lib64/python3.13/site-packages/zha/application/const.py" ]; then
-            if patch ${home_assistant_path}/lib64/python3.13/site-packages/zha/application/const.py < "${current_dir}/zha.patch"; then
+            if patch ${home_assistant_path}/lib64/python3.13/site-packages/zha/application/const.py < "${current_dir}/prebuild/zha.patch"; then
                 print_info "zha.patch applied successfully"
             else
                 print_error "Failed to apply zha.patch, continuing without patch"
@@ -255,14 +255,14 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
             print_error "Target file const.py not found, skipping zha.patch"
         fi
     else
-        print_info "zha.patch not found in ${current_dir}, skipping"
+        print_info "zha.patch not found in ${current_dir}/prebuild, skipping"
     fi
     
     # Apply zigpy_cli.patch
-    if [ -f "${current_dir}/zigpy_cli.patch" ]; then
+    if [ -f "${current_dir}/prebuild/zigpy_cli.patch" ]; then
         print_info "Applying zigpy_cli.patch to zigpy_cli..."
         if [ -f "${home_assistant_path}/lib64/python3.13/site-packages/zigpy_cli/const.py" ]; then
-            if patch ${home_assistant_path}/lib64/python3.13/site-packages/zigpy_cli/const.py < "${current_dir}/zigpy_cli.patch"; then
+            if patch ${home_assistant_path}/lib64/python3.13/site-packages/zigpy_cli/const.py < "${current_dir}/prebuild/zigpy_cli.patch"; then
                 print_info "zigpy_cli.patch applied successfully"
             else
                 print_error "Failed to apply zigpy_cli.patch, continuing without patch"
@@ -271,7 +271,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
             print_error "Target directory zigpy_cli not found, skipping zigpy_cli.patch"
         fi
     else
-        print_info "zigpy_cli.patch not found in ${current_dir}, skipping"
+        print_info "zigpy_cli.patch not found in ${current_dir}/prebuild, skipping"
     fi
 
     deactivate
@@ -314,7 +314,7 @@ mkdir -p /var/lib/homeassistant/homeassistant
 mkdir -p /var/lib/homeassistant/matter_server
 
 if [ ! -f "/usr/local/bin/zigpy_help.sh" ]; then
-    cp ${current_dir}/zigpy_help.sh /usr/local/bin/zigpy_help.sh
+    cp ${current_dir}/prebuild/zigpy_help.sh /usr/local/bin/zigpy_help.sh
     chmod +x /usr/local/bin/zigpy_help.sh
 fi
 
@@ -323,37 +323,37 @@ if [ -d "${home_assistant_path}/bin" ]; then
     find /srv/homeassistant -name "*.pyc" -delete
     find /srv/homeassistant -name "__pycache__" -type d -exec rm -rf {} +
 
-    cp ${current_dir}/home_assistant_init.sh ${home_assistant_path}/bin/home_assistant_init.sh
+    cp ${current_dir}/prebuild/home_assistant_init.sh ${home_assistant_path}/bin/home_assistant_init.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_init.sh
 
-    cp ${current_dir}/home_assistant_zigbee_fix.sh ${home_assistant_path}/bin/home_assistant_zigbee_fix.sh
+    cp ${current_dir}/prebuild/home_assistant_zigbee_fix.sh ${home_assistant_path}/bin/home_assistant_zigbee_fix.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_zigbee_fix.sh
 
-    cp ${current_dir}/home_assistant_blz_reset.sh ${home_assistant_path}/bin/home_assistant_blz_reset.sh
+    cp ${current_dir}/prebuild/home_assistant_blz_reset.sh ${home_assistant_path}/bin/home_assistant_blz_reset.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_blz_reset.sh
 
-    cp ${current_dir}/home_assistant_matter_fix.sh ${home_assistant_path}/bin/home_assistant_matter_fix.sh
+    cp ${current_dir}/prebuild/home_assistant_matter_fix.sh ${home_assistant_path}/bin/home_assistant_matter_fix.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_matter_fix.sh
 
-    cp ${current_dir}/home_assistant_boot_check.sh ${home_assistant_path}/bin/home_assistant_boot_check.sh
-    cp ${current_dir}/home_assistant_boot_check.py ${home_assistant_path}/bin/home_assistant_boot_check.py
+    cp ${current_dir}/prebuild/home_assistant_boot_check.sh ${home_assistant_path}/bin/home_assistant_boot_check.sh
+    cp ${current_dir}/prebuild/home_assistant_boot_check.py ${home_assistant_path}/bin/home_assistant_boot_check.py
     chmod +x ${home_assistant_path}/bin/home_assistant_boot_check.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_boot_check.py
 
-    cp ${current_dir}/home_assistant_zha_enable.py ${home_assistant_path}/bin/home_assistant_zha_enable.py
+    cp ${current_dir}/prebuild/home_assistant_zha_enable.py ${home_assistant_path}/bin/home_assistant_zha_enable.py
     chmod +x ${home_assistant_path}/bin/home_assistant_zha_enable.py
 
-    cp ${current_dir}/home_assistant_z2m_enable.py ${home_assistant_path}/bin/home_assistant_z2m_enable.py
+    cp ${current_dir}/prebuild/home_assistant_z2m_enable.py ${home_assistant_path}/bin/home_assistant_z2m_enable.py
     chmod +x ${home_assistant_path}/bin/home_assistant_z2m_enable.py
 fi
 
 if [ ! -f "/usr/lib/systemd/system/home-assistant.service" ]; then
-    cp ${current_dir}/home-assistant.service /usr/lib/systemd/system/home-assistant.service
+    cp ${current_dir}/prebuild/home-assistant.service /usr/lib/systemd/system/home-assistant.service
     systemctl daemon-reload
 fi
 
 if [ ! -f "/usr/lib/systemd/system/matter-server.service" ]; then
-    cp ${current_dir}/matter-server.service /usr/lib/systemd/system/matter-server.service
+    cp ${current_dir}/prebuild/matter-server.service /usr/lib/systemd/system/matter-server.service
     systemctl daemon-reload
 fi
 
@@ -383,6 +383,10 @@ cp /srv/* ${output_dir}/srv/ -R
 mkdir -p ${output_dir}/lib/systemd/system/
 cp /lib/systemd/system/home-assistant.service ${output_dir}/lib/systemd/system/
 cp /lib/systemd/system/matter-server.service ${output_dir}/lib/systemd/system/
+
+# 清理输出目录中的Python缓存文件与目录，避免打包冗余内容
+find "${output_dir}" -type d -name "__pycache__" -exec rm -rf {} +
+find "${output_dir}" -type f -name "*.pyc" -delete
 
 print_info "Start to build hacore_${version}.deb ..."
 dpkg-deb --build ${output_dir} ${current_dir}/hacore_${version}.deb
