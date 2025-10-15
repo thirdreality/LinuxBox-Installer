@@ -39,7 +39,7 @@ download_file() {
 
 print_info "Target Python Version: $INSTALL_PYTHON_VERSION"
 
-version=$(grep '^Version:' ${current_dir}/DEBIAN/control | awk '{print $2}')
+version=$(grep '^Version:' ${current_dir}/prebuild/DEBIAN/control | awk '{print $2}')
 print_info "Config Python Version: $version"
 
 if [[ "$CLEAN" == true ]]; then
@@ -59,14 +59,14 @@ if [[ "$REBUILD" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
     mkdir -p "${output_dir}"
 
-    cp ${current_dir}/DEBIAN ${output_dir}/ -R
+    cp ${current_dir}/prebuild/DEBIAN ${output_dir}/ -R
 fi
 
 print_info "Create output directory ..."
 mkdir -p "${output_dir}"
 
 print_info "Sync DEBIAN ..."
-cp ${current_dir}/DEBIAN ${output_dir}/ -R
+cp ${current_dir}/prebuild/DEBIAN ${output_dir}/ -R
 
 dependencies=(
     make 
