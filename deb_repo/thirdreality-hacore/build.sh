@@ -25,16 +25,16 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --rebuild) REBUILD=true ;;
         --clean) CLEAN=true ;;
-        *) print_info "未知参数: $1" >&2; exit 1 ;;
+        *) print_info "Unknown argument: $1" >&2; exit 1 ;;
     esac
     shift
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.10.1"
+export HOME_ASSISTANT_VERSION="2025.10.2"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20251001.0" 
+export FRONTEND_VERSION="20251001.2" 
 
 #python-matter-server==8.1.0
 export MATTER_SERVER_VERSION="8.1.1"
@@ -46,7 +46,7 @@ print_info "Version: $version"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
-    rm -rf ${current_dir}/*.deb > /dev/null 2>&1
+    #rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
     systemctl stop home-assistant.service || true
     systemctl disable home-assistant.service || true
@@ -122,11 +122,11 @@ fi
 UV_INSTALLED_COMMAND="python3 -m pip install"
 if command -v uv >/dev/null 2>&1; then
     UV_INSTALLED=true
-    echo "uv 已安装，版本: $(uv --version)"
+    echo "uv is installed, version: $(uv --version)"
     UV_INSTALLED_COMMAND="uv pip install"
 else
     UV_INSTALLED=false
-    echo "uv 未安装或不在 PATH 中"
+    echo "uv is not installed or not in PATH"
 fi
 
 # 检查是否设置了 Home Assistant 和其他版本号
