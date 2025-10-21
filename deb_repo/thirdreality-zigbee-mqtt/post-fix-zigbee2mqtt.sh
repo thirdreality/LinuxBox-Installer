@@ -143,9 +143,21 @@ check_hacore_installed() {
 # Function to disable services (ZHA mode)
 disable_services() {
     log "Disabling zigbee2mqtt service for ZHA mode (keeping mosquitto running)"
+    
+    # Always enable and start mosquitto (needed for other services)
+    systemctl enable mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to enable mosquitto.service"
+    systemctl start mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to start mosquitto.service"
+    
+    # Disable and stop zigbee2mqtt only
     systemctl disable zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to disable zigbee2mqtt.service"
-    systemctl stop mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to stop mosquitto.service"
     systemctl stop zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to stop zigbee2mqtt.service"
+    
+    # Verify mosquitto is running
+    if systemctl is-active --quiet mosquitto.service; then
+        log "INFO: Mosquitto service is running (as required)"
+    else
+        log "WARNING: Mosquitto service may not be running properly"
+    fi
 }
 
 # Function to enable and start services (MQTT mode)
