@@ -21,10 +21,10 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
+
 install_packages() {
     log "Installing dependencies for mosquitto and zigbee2mqtt..."
     
-    # Define packages in the original installation order
     local PACKAGES=(
         "libdlt2_*.deb"
         "libmosquitto1_*.deb"
@@ -34,20 +34,70 @@ install_packages() {
         "nodejs_*.deb"
     )
     
-    # Install packages in the defined order using a for loop
+    local failed_packages=()
+    
     for pkg in "${PACKAGES[@]}"; do
         local pkg_files=(${DEFAULT_APT_CACHE}/${pkg})
         if [ ${#pkg_files[@]} -gt 0 ] && [ -f "${pkg_files[0]}" ]; then
             log "Installing ${pkg}..."
-            dpkg -i ${DEFAULT_APT_CACHE}/${pkg} > /dev/null 2>&1 || true
+            if dpkg -i ${DEFAULT_APT_CACHE}/${pkg} 2>&1 | tee -a "$LOG_FILE"; then
+                log "SUCCESS: ${pkg} installed"
+            else
+                log "WARNING: ${pkg} installation failed, will fix later"
+                failed_packages+=("${pkg}")
+            fi
         else
             log "WARNING: No matching files found for ${pkg}"
+            failed_packages+=("${pkg}")
         fi
     done
     
-    # Fix any dependency issues
-    log "Fixing dependencies..."
-    apt-get install -f -y > /dev/null 2>&1 || log "WARNING: Some dependencies could not be fixed"
+    # 修复依赖
+    if [ ${#failed_packages[@]} -gt 0 ]; then
+        log "Fixing dependencies for failed packages: ${failed_packages[*]}"
+        if apt-get install -f -y 2>&1 | tee -a "$LOG_FILE"; then
+            log "Dependencies fixed successfully"
+        else
+            log "ERROR: Failed to fix dependencies"
+            return 1
+        fi
+    fi
+    
+    # 验证安装结果
+    verify_installation || return 1
+}
+
+verify_installation() {
+    log "Verifying installation..."
+    
+    local missing_commands=()
+    
+    if ! command -v node &> /dev/null; then
+        missing_commands+=("node")
+    fi
+    
+    if ! command -v mosquitto &> /dev/null; then
+        missing_commands+=("mosquitto")
+    fi
+    
+    if ! command -v mosquitto_passwd &> /dev/null; then
+        missing_commands+=("mosquitto_passwd")
+    fi
+    
+    if [ ${#missing_commands[@]} -gt 0 ]; then
+        log "ERROR: Missing commands after installation: ${missing_commands[*]}"
+        return 1
+    fi
+    
+    log "All required commands are available"
+    
+    # 记录版本信息
+    log "Installed versions:"
+    log "  Node.js: $(node --version)"
+    log "  npm: $(npm --version)"
+    log "  mosquitto: $(mosquitto -h 2>&1 | head -1)"
+    
+    return 0
 }
 
 configure_mosquitto() {
