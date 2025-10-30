@@ -40,11 +40,12 @@ case "$1" in
             if [ -d "/opt/zigbee2mqtt/data" ]; then
                 rm -rf /opt/zigbee2mqtt/data/*
             fi
-
+            # 首次安装才清空数据
         else
             # Upgrade operation
             fix_manual_install
-        fi    
+            # 升级时什么也不覆盖、不清空
+        fi  
 
         echo "=========================================================="
         echo "If you manually install zigbee-mqtt.deb, please execute"

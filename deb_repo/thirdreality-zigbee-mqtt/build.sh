@@ -46,6 +46,8 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
     rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
+    rm -rf /etc/mosquitto/passwd > /dev/null 2>&1
+
     # Clean Node.js and mosquitto related packages
     print_info "Cleaning mosquitto, nodejs ..."
     apt-get remove --purge nodejs npm libsystemd-dev -y 2>/dev/null || true
@@ -108,6 +110,12 @@ if ! dpkg -l | grep -q "mosquitto " || ! dpkg -l | grep -q "mosquitto-clients"; 
     systemctl disable mosquitto.service
     systemctl stop mosquitto.service
     #mosquitto -v
+
+    mkdir -p ${current_dir}/deb/mosquitto
+    cp /var/cache/apt/archives/mosquitto*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libmosquitto*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libdlt2*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/mosquitto-clients*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true    
 fi
 
 # post install
@@ -129,6 +137,10 @@ if ! dpkg -l | grep -q "nodejs "; then
     curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
     apt-get install --download-only nodejs libsystemd-dev
     apt-get install -y nodejs libsystemd-dev   
+
+    mkdir -p ${current_dir}/deb/nodejs
+    cp /var/cache/apt/archives/nodejs*.deb ${current_dir}/deb/nodejs/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libsystemd-dev*.deb ${current_dir}/deb/nodejs/ 2>/dev/null || true    
 fi
 
 if [ ! -d "/lib/node_modules/pnpm" ]; then
@@ -137,13 +149,27 @@ if [ ! -d "/lib/node_modules/pnpm" ]; then
     npm install -g pnpm@10.12.1
 fi
 
-print_info "node version should output V18.x, V20.x, V21.X, current: \e[1;31m $(node --version)\e[0m "
-#node --version # Should output V18.x, V20.x, V21.X
+print_info "node version should output V22.x, V24.x, current: \e[1;31m $(node --version)\e[0m "
 
-print_info "npm version should output 9.X or 10.X, current: \e[1;31m $(npm --version)\e[0m "
+print_info "npm version should output 10.X, current: \e[1;31m $(npm --version)\e[0m "
 #npm --version # Should output 9.X or 10.X
 
 print_info "pnpm version should output 10.X, current: \e[1;31m $(pnpm --version)\e[0m "
+
+
+# --------------------- 自动清理deb目录旧包，只保留每个包类型的最新版 ---------------------
+print_info "清理 deb 目录旧包，只保留每个软件的最新deb ..."
+for pkg in $(ls ./deb/*.deb 2>/dev/null | sed 's#.*/##;s/_.*//;' | sort -u); do
+    newest=$(ls ./deb/${pkg}_*.deb 2>/dev/null | sort -V | tail -n1)
+    for f in ./deb/${pkg}_*.deb; do
+        if [ "$f" != "$newest" ]; then
+            print_info "删除旧包: $f"
+            rm -f "$f"
+        fi
+    done
+    print_info "本次保留: $newest"
+done
+# ----------------------------------------------------------------------
 
 # Create package
 print_info "Create output directory ..."

@@ -22,49 +22,50 @@ log() {
 }
 
 
-install_packages() {
-    log "Installing dependencies for mosquitto and zigbee2mqtt..."
-    
-    local PACKAGES=(
-        "libdlt2_*.deb"
-        "libmosquitto1_*.deb"
-        "mosquitto-clients_*.deb"
-        "mosquitto_*.deb"
-        "libsystemd-dev_*.deb"
-        "nodejs_*.deb"
-    )
-    
-    local failed_packages=()
-    
-    for pkg in "${PACKAGES[@]}"; do
+install_mosquitto_packages() {
+    local MOS_PACKAGES=("libdlt2_*.deb" "libmosquitto1_*.deb" "mosquitto-clients_*.deb" "mosquitto_*.deb")
+    for pkg in "${MOS_PACKAGES[@]}"; do
         local pkg_files=(${DEFAULT_APT_CACHE}/${pkg})
         if [ ${#pkg_files[@]} -gt 0 ] && [ -f "${pkg_files[0]}" ]; then
-            log "Installing ${pkg}..."
-            if dpkg -i ${DEFAULT_APT_CACHE}/${pkg} 2>&1 | tee -a "$LOG_FILE"; then
-                log "SUCCESS: ${pkg} installed"
-            else
-                log "WARNING: ${pkg} installation failed, will fix later"
-                failed_packages+=("${pkg}")
-            fi
-        else
-            log "WARNING: No matching files found for ${pkg}"
-            failed_packages+=("${pkg}")
+            log "安装 $pkg ..."
+            dpkg -i ${DEFAULT_APT_CACHE}/${pkg} 2>&1 | tee -a "$LOG_FILE" || true
         fi
     done
-    
-    # 修复依赖
-    if [ ${#failed_packages[@]} -gt 0 ]; then
-        log "Fixing dependencies for failed packages: ${failed_packages[*]}"
-        if apt-get install -f -y 2>&1 | tee -a "$LOG_FILE"; then
-            log "Dependencies fixed successfully"
+    apt-get install -f -y 2>&1 | tee -a "$LOG_FILE"
+}
+
+install_libsystemd_dev() {
+    local pkg_file=$(ls $DEFAULT_APT_CACHE/libsystemd-dev_*.deb 2>/dev/null | head -n 1)
+    if [ -n "$pkg_file" ]; then
+        local new_ver=$(dpkg-deb -f "$pkg_file" Version)
+        local cur_ver=$(dpkg-query -W -f='${Version}' libsystemd-dev 2>/dev/null)
+        log "libsystemd-dev 目标版本: $new_ver，已装版本: $cur_ver"
+        if [ -z "$cur_ver" ]; then
+            dpkg -i "$pkg_file"
+        elif dpkg --compare-versions "$cur_ver" lt "$new_ver"; then
+            apt-get remove --purge -y libsystemd-dev
+            dpkg -i "$pkg_file"
         else
-            log "ERROR: Failed to fix dependencies"
-            return 1
+            log "libsystemd-dev 已是新版本, 跳过"
         fi
     fi
-    
-    # 验证安装结果
-    verify_installation || return 1
+}
+
+install_nodejs() {
+    local pkg_file=$(ls $DEFAULT_APT_CACHE/nodejs_*.deb 2>/dev/null | head -n 1)
+    if [ -n "$pkg_file" ]; then
+        local new_ver=$(dpkg-deb -f "$pkg_file" Version)
+        local cur_ver=$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null)
+        log "nodejs 目标版本: $new_ver，已装版本: $cur_ver"
+        if [ -z "$cur_ver" ]; then
+            dpkg -i "$pkg_file"
+        elif dpkg --compare-versions "$cur_ver" lt "$new_ver"; then
+            apt-get remove --purge -y nodejs npm
+            dpkg -i "$pkg_file"
+        else
+            log "nodejs 已是新版本, 跳过"
+        fi
+    fi
 }
 
 verify_installation() {
@@ -105,41 +106,47 @@ configure_mosquitto() {
         log "WARNING: mosquitto_passwd not found, skipping password setup"
         return
     fi
-    
+
     if [ ! -d "$MOSQUITTO_DIR" ]; then
         log "Creating $MOSQUITTO_DIR directory"
         mkdir -p "$MOSQUITTO_DIR"
     fi
-    
-    # Set up password
-    log "Setting up mosquitto password"
-    mosquitto_passwd -b -c "$MOSQUITTO_DIR/passwd" thirdreality thirdreality
-    
-    # Copy default config if available
-    if [ -f "$THIRDREALITY_CONF/mosquitto.conf.default" ]; then
-        log "Installing mosquitto configuration"
-        cp "$THIRDREALITY_CONF/mosquitto.conf.default" "$MOSQUITTO_DIR/mosquitto.conf"
+
+    if [ ! -f "$MOSQUITTO_DIR/passwd" ]; then
+        log "Setting up mosquitto password"
+        mosquitto_passwd -b -c "$MOSQUITTO_DIR/passwd" thirdreality thirdreality
     else
-        log "WARNING: Default mosquitto configuration not found"
+        log "mosquitto passwd file already exists, skipping creation"
+    fi
+
+    if [ ! -f "$MOSQUITTO_DIR/mosquitto.conf" ]; then
+        if [ -f "$THIRDREALITY_CONF/mosquitto.conf.default" ]; then
+            log "Installing mosquitto configuration"
+            cp "$THIRDREALITY_CONF/mosquitto.conf.default" "$MOSQUITTO_DIR/mosquitto.conf"
+        else
+            log "WARNING: Default mosquitto configuration template not found"
+        fi
+    else
+        log "mosquitto.conf already exists, skipping copy"
     fi
 }
 
 configure_zigbee2mqtt() {
     if [ ! -f "$THIRDREALITY_CONF/configuration.yaml.default" ]; then
-        log "WARNING: Default zigbee2mqtt configuration not found"
+        log "WARNING: Default zigbee2mqtt configuration template not found"
         return
     fi
-    
+
     if [ ! -d "$ZIGBEE2MQTT_DIR" ]; then
         log "Creating $ZIGBEE2MQTT_DIR directory"
         mkdir -p "$ZIGBEE2MQTT_DIR"
     fi
-    
+
     if [ ! -f "$ZIGBEE2MQTT_DIR/configuration.yaml" ]; then
         log "Installing zigbee2mqtt configuration"
         cp "$THIRDREALITY_CONF/configuration.yaml.default" "$ZIGBEE2MQTT_DIR/configuration.yaml"
     else
-        log "INFO: Default zigbee2mqtt configuration already exists"
+        log "zigbee2mqtt configuration file already exists, skipping copy"
     fi
 
     if [ -f "/usr/lib/node_modules/pnpm/bin/pnpm.cjs" ]; then
@@ -251,13 +258,19 @@ rm -rf ${DEFAULT_APT_CACHE}/*.deb
 log "Copying package files to apt cache"
 cp "$THIRDREALITY_ARCHIVES"/*.deb "$DEFAULT_APT_CACHE/" || log "WARNING: Failed to copy some package files"
 
-# Install packages
-install_packages
+# 调用顺序替换为：
+install_mosquitto_packages
+install_libsystemd_dev
+install_nodejs
 
 # Clean up apt cache after installation
 rm -rf ${DEFAULT_APT_CACHE}/*.deb
 
 stop_services
+
+configure_mosquitto
+configure_zigbee2mqtt
+
 
 SKIP_AUTO_CONFIGRATION=false
 if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
@@ -266,12 +279,6 @@ if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/m
 		echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/ with .enable-restore flag, skipping channel change operation"
 		SKIP_AUTO_CONFIGRATION=true
 	fi
-fi
-
-if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
-    # Configure services
-    configure_mosquitto
-    configure_zigbee2mqtt
 fi
 
 if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then

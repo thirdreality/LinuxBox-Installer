@@ -5,6 +5,7 @@ case "$1" in
     purge)
         rm -rf /opt/zigbee2mqtt/data/*
         rm -rf /opt/zigbee2mqtt/
+        rm -rf /opt/zigbee-herdsman/
     ;;
     remove|abort-install|abort-upgrade|disappear)
     ;;
