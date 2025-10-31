@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+
+# Keep it simple: on remove, clear the whole data directory once
+if [ "$1" = "remove" ]; then
+    rm -rf /var/lib/homeassistant
+    mkdir -p /var/lib/homeassistant
+    echo "Removed /var/lib/homeassistant."
+fi
+
+# On purge, delete completely and do NOT recreate
+if [ "$1" = "purge" ]; then
+    rm -rf /var/lib/homeassistant
+    echo "Purged /var/lib/homeassistant."
+fi
+
+exit 0

@@ -1,9 +1,28 @@
 #!/bin/bash
-
 set -e
 
+PKG_NAME="thirdreality-hacore-config"
+ACTION="$1"
 TARGET_DIR="/var/lib/homeassistant"
 
-if [ -d "$TARGET_DIR" ]; then
-    rm -rf "$TARGET_DIR" || true
+# Block if already installed (disallow upgrade/reinstall)
+if dpkg-query -W -f='${Status}\n' "$PKG_NAME" 2>/dev/null | grep -q "install ok installed"; then
+    echo "[ERROR] $PKG_NAME is already installed. Upgrades/reinstalls are not allowed. Please purge it first."
+    exit 1
 fi
+
+# Explicitly block upgrade paths
+if [ "$ACTION" = "upgrade" ] || [ "$ACTION" = "abort-upgrade" ]; then
+    echo "[ERROR] Detected '$ACTION'. This package only supports fresh installs. Upgrades are not allowed."
+    exit 1
+fi
+
+# Fresh install: clear old runtime/config to avoid incompatibilities
+if [ "$ACTION" = "install" ]; then
+    if [ -d "$TARGET_DIR" ]; then
+        rm -rf "$TARGET_DIR" || true
+        mkdir -p "$TARGET_DIR"
+    fi
+fi
+
+exit 0

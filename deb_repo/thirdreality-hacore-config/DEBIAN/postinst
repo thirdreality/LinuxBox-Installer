@@ -4,6 +4,7 @@ set -e
 if [ "$1" = "configure" ]; then
 	rm -rf /var/lib/homeassistant/zha.conf
 	rm -rf /var/lib/homeassistant/zha.conf.bak
+	rm -rf /var/lib/homeassistant/zigpy-backup.json
 
 	if [ -f "/usr/local/bin/zigpy_help.sh" ]; then
 		chmod +x /usr/local/bin/zigpy_help.sh
