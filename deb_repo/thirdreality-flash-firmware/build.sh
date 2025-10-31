@@ -52,33 +52,57 @@ cp ${current_dir}/DEBIAN ${output_dir}/ -R
 mkdir -p ${output_dir}/usr/lib/thirdreality/images
 #mkdir -p ${output_dir}/etc/systemd/system
 
-cp ${current_dir}/partition_images ${output_dir}/usr/lib/thirdreality/images/ -R
+# Assets now live under prebuild/
+assets_dir="${current_dir}/prebuild"
 
-if [ -f "${current_dir}/bflb_iot.tar.gz" ]; then
-    cp ${current_dir}/bflb_iot.tar.gz ${output_dir}/usr/lib/thirdreality/images/
+# partition_images directory
+if [ -d "${assets_dir}/partition_images" ]; then
+    cp "${assets_dir}/partition_images" "${output_dir}/usr/lib/thirdreality/images/" -R
+elif [ -d "${current_dir}/partition_images" ]; then
+    # fallback for legacy layout
+    cp "${current_dir}/partition_images" "${output_dir}/usr/lib/thirdreality/images/" -R
 fi
 
-if [ -f "${current_dir}/bl706_func.sh" ]; then
-    cp ${current_dir}/bl706_func.sh ${output_dir}/usr/lib/thirdreality/images/
-    chmod +x ${output_dir}/usr/lib/thirdreality/images/bl706_func.sh
+# optional blobs/tools that might exist
+if [ -f "${assets_dir}/bflb_iot.tar.gz" ]; then
+    cp "${assets_dir}/bflb_iot.tar.gz" "${output_dir}/usr/lib/thirdreality/images/"
+elif [ -f "${current_dir}/bflb_iot.tar.gz" ]; then
+    cp "${current_dir}/bflb_iot.tar.gz" "${output_dir}/usr/lib/thirdreality/images/"
 fi
 
-if [ -f "${current_dir}/check_thread_firmware.py" ]; then
-    cp ${current_dir}/check_thread_firmware.py ${output_dir}/usr/lib/thirdreality/images/
-    chmod +x ${output_dir}/usr/lib/thirdreality/images/check_thread_firmware.py
+if [ -f "${assets_dir}/bl706_func.sh" ]; then
+    cp "${assets_dir}/bl706_func.sh" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/bl706_func.sh"
+elif [ -f "${current_dir}/bl706_func.sh" ]; then
+    cp "${current_dir}/bl706_func.sh" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/bl706_func.sh"
 fi
 
-if [ -f "${current_dir}/check_zigbee_firmware.py" ]; then
-    cp ${current_dir}/check_zigbee_firmware.py ${output_dir}/usr/lib/thirdreality/images/
-    chmod +x ${output_dir}/usr/lib/thirdreality/images/check_zigbee_firmware.py
+if [ -f "${assets_dir}/check_thread_firmware.py" ]; then
+    cp "${assets_dir}/check_thread_firmware.py" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/check_thread_firmware.py"
+elif [ -f "${current_dir}/check_thread_firmware.py" ]; then
+    cp "${current_dir}/check_thread_firmware.py" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/check_thread_firmware.py"
 fi
 
-if [ -f "${current_dir}/upgrade_firmware.sh" ]; then
-    cp ${current_dir}/upgrade_firmware.sh ${output_dir}/usr/lib/thirdreality/images/
-    chmod +x ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
-    
+if [ -f "${assets_dir}/check_zigbee_firmware.py" ]; then
+    cp "${assets_dir}/check_zigbee_firmware.py" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/check_zigbee_firmware.py"
+elif [ -f "${current_dir}/check_zigbee_firmware.py" ]; then
+    cp "${current_dir}/check_zigbee_firmware.py" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/check_zigbee_firmware.py"
+fi
+
+if [ -f "${assets_dir}/upgrade_firmware.sh" ]; then
+    cp "${assets_dir}/upgrade_firmware.sh" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh"
     # Replace VERSION in upgrade_firmware.sh with dynamic version
-    sed -i "s/VERSION=\"1.00.00\"/VERSION=\"${version}\"/" ${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh
+    sed -i "s/VERSION=\"1.00.00\"/VERSION=\"${version}\"/" "${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh"
+elif [ -f "${current_dir}/upgrade_firmware.sh" ]; then
+    cp "${current_dir}/upgrade_firmware.sh" "${output_dir}/usr/lib/thirdreality/images/"
+    chmod +x "${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh"
+    sed -i "s/VERSION=\"1.00.00\"/VERSION=\"${version}\"/" "${output_dir}/usr/lib/thirdreality/images/upgrade_firmware.sh"
 fi
 
 # Copy systemd service file

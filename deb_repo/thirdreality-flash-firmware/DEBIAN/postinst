@@ -3,34 +3,36 @@ set -e
 
 # 检查是安装还是升级
 if [ "$1" = "configure" ]; then
+    # Ensure tools are executable
     if [ -f "/usr/lib/thirdreality/images/upgrade_firmware.sh" ]; then
         chmod +x /usr/lib/thirdreality/images/upgrade_firmware.sh
     fi
-    
-    # systemctl daemon-reload || true
-    # systemctl disable thirdreality-firmware-upgrade.service || true
-
-    # echo "Launching firmware upgrade service in background..."
-    # systemd-run --no-block --unit=firmware-upgrade \
-    #     --description="Async firmware upgrade" \
-    #     systemctl start thirdreality-firmware-upgrade.service || true
-
-    # echo "Firmware upgrade service scheduled in background."
-
-elif [ "$1" = "fix-dependency" ]; then
-    echo "Try to flash bl706 firmware and check firmware"
-    
     if [ -f "/usr/lib/thirdreality/images/check_thread_firmware.py" ]; then
         chmod +x /usr/lib/thirdreality/images/check_thread_firmware.py
     fi
-
+    if [ -f "/usr/lib/thirdreality/images/check_zigbee_firmware.py" ]; then
+        chmod +x /usr/lib/thirdreality/images/check_zigbee_firmware.py
+    fi
+elif [ "$1" = "fix-dependency" ]; then
+    # Ensure tools are executable
+    if [ -f "/usr/lib/thirdreality/images/upgrade_firmware.sh" ]; then
+        chmod +x /usr/lib/thirdreality/images/upgrade_firmware.sh
+    fi
+    if [ -f "/usr/lib/thirdreality/images/check_thread_firmware.py" ]; then
+        chmod +x /usr/lib/thirdreality/images/check_thread_firmware.py
+    fi
     if [ -f "/usr/lib/thirdreality/images/check_zigbee_firmware.py" ]; then
         chmod +x /usr/lib/thirdreality/images/check_zigbee_firmware.py
     fi
 
+    echo "Start to flash board firmware (configure) ..."
     if [ -f "/usr/lib/thirdreality/images/upgrade_firmware.sh" ]; then
-        /usr/lib/thirdreality/images/upgrade_firmware.sh || true
+        /usr/lib/thirdreality/images/upgrade_firmware.sh
+    else
+        echo "upgrade_firmware.sh not found, skip flashing" >&2
+        exit 1
     fi
+    echo "Flash board firmware finished."
 fi
 
 exit 0
