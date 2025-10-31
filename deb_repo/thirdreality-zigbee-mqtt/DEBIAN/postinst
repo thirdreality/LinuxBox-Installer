@@ -30,6 +30,10 @@ fix_manual_install() {
     if [ -f "/opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh" ]; then
         chmod +x /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
     fi
+
+    if [ -f "/opt/zigbee2mqtt/scripts/z2m-permit-on-passlist.sh" ]; then
+        chmod +x /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
+    fi    
 }
 
 case "$1" in
