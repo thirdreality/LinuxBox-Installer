@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -e
+
+case "$1" in
+    install|upgrade)
+        if command -v systemctl >/dev/null 2>&1; then
+            if [[ "$(systemctl is-active home-assistant.service 2>/dev/null || true)" == "active" ]]; then
+                echo "Stopping home-assistant.service"
+                systemctl stop home-assistant.service || true
+            fi
+
+            if [[ "$(systemctl is-active matter-server.service 2>/dev/null || true)" == "active" ]]; then
+                echo "Stopping matter-server.service"
+                systemctl stop matter-server.service || true
+            fi
+        fi
+        ;;
+esac
+

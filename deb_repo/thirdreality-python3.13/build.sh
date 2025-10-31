@@ -7,7 +7,7 @@ REBUILD=false
 CLEAN=false
 
 PYTHON_VERSION="3.13" # main version
-INSTALL_PYTHON_VERSION="3.13.3" # sub verion, for download
+INSTALL_PYTHON_VERSION="3.13.9" # sub verion, for download
 python3_dir="/usr/local/python3" # install target directory
 
 SCRIPT="R3"
@@ -23,7 +23,7 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --rebuild) REBUILD=true ;;
         --clean) CLEAN=true ;;
-        *) print_error "未知参数: $1" >&2; exit 1 ;;
+        *) print_error "Unknown argument: $1" >&2; exit 1 ;;
     esac
     shift
 done
@@ -39,7 +39,13 @@ download_file() {
 
 print_info "Target Python Version: $INSTALL_PYTHON_VERSION"
 
-version=$(grep '^Version:' ${current_dir}/prebuild/DEBIAN/control | awk '{print $2}')
+# ensure DEBIAN/control exists
+if [[ ! -f "${current_dir}/DEBIAN/control" ]]; then
+    print_error "Missing DEBIAN/control. Please verify the directory."
+    exit 1
+fi
+
+version=$(grep '^Version:' ${current_dir}/DEBIAN/control | awk '{print $2}')
 print_info "Config Python Version: $version"
 
 if [[ "$CLEAN" == true ]]; then
@@ -59,14 +65,14 @@ if [[ "$REBUILD" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
     mkdir -p "${output_dir}"
 
-    cp ${current_dir}/prebuild/DEBIAN ${output_dir}/ -R
+    cp ${current_dir}/DEBIAN ${output_dir}/ -R
 fi
 
 print_info "Create output directory ..."
 mkdir -p "${output_dir}"
 
 print_info "Sync DEBIAN ..."
-cp ${current_dir}/prebuild/DEBIAN ${output_dir}/ -R
+cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
 dependencies=(
     make 
@@ -114,17 +120,18 @@ if [[ "$CURRENT_PYTHON" < "3.13.0" ]]; then
     fi
 
     if ! tar -xf "${current_dir}/Python-$INSTALL_PYTHON_VERSION.tgz"; then
-        echo "错误: 解压失败！" >&2
-        echo "删除文件: Python-$INSTALL_PYTHON_VERSION.tgz, 请检查网络后重试." >&2
+        echo "Error: extraction failed!" >&2
+        echo "Please remove: Python-$INSTALL_PYTHON_VERSION.tgz and retry after checking the network." >&2
         exit 1
     fi
 
+    #https://docs.python.org/3.13/using/unix.html#building-python
     cd ${current_dir}/Python-$INSTALL_PYTHON_VERSION
     ./configure --prefix=${python3_dir} --enable-optimizations --disable-test-modules --with-ensurepip=install
     make -j "$(nproc)"
     make altinstall
 
-    if [ ! -f "${python3_dir}/bin/python3.13" ]; then
+    if [ -f "${python3_dir}/bin/python3.13" ]; then
         strip "${python3_dir}/bin/python3.13"
     fi
 
