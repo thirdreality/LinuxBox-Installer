@@ -111,11 +111,11 @@ if ! dpkg -l | grep -q "mosquitto " || ! dpkg -l | grep -q "mosquitto-clients"; 
     systemctl stop mosquitto.service
     #mosquitto -v
 
-    mkdir -p ${current_dir}/deb/mosquitto
-    cp /var/cache/apt/archives/mosquitto*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true
-    cp /var/cache/apt/archives/libmosquitto*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true
-    cp /var/cache/apt/archives/libdlt2*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true
-    cp /var/cache/apt/archives/mosquitto-clients*.deb ${current_dir}/deb/mosquitto/ 2>/dev/null || true    
+    mkdir -p ${current_dir}/prebuild/deb/mosquitto
+    cp /var/cache/apt/archives/mosquitto*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libmosquitto*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libdlt2*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/mosquitto-clients*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true    
 fi
 
 # post install
@@ -128,7 +128,7 @@ if [ -f "/usr/bin/mosquitto_passwd" ]; then
 fi
 
 mkdir -p /etc/mosquitto
-cp ${current_dir}/mosquitto.conf /etc/mosquitto/mosquitto.conf
+cp ${current_dir}/prebuild/mosquitto.conf /etc/mosquitto/mosquitto.conf
 
 systemctl start mosquitto.service
 
@@ -138,9 +138,10 @@ if ! dpkg -l | grep -q "nodejs "; then
     apt-get install --download-only nodejs libsystemd-dev
     apt-get install -y nodejs libsystemd-dev   
 
-    mkdir -p ${current_dir}/deb/nodejs
-    cp /var/cache/apt/archives/nodejs*.deb ${current_dir}/deb/nodejs/ 2>/dev/null || true
-    cp /var/cache/apt/archives/libsystemd-dev*.deb ${current_dir}/deb/nodejs/ 2>/dev/null || true    
+    mkdir -p ${current_dir}/prebuild/deb/nodejs
+    cp /var/cache/apt/archives/nodejs*.deb ${current_dir}/prebuild/deb/nodejs/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libsystemd-dev*.deb ${current_dir}/prebuild/deb/nodejs/ 2>/dev/null || true    
+    
 fi
 
 if [ ! -d "/lib/node_modules/pnpm" ]; then
@@ -158,17 +159,36 @@ print_info "pnpm version should output 10.X, current: \e[1;31m $(pnpm --version)
 
 
 # --------------------- 自动清理deb目录旧包，只保留每个包类型的最新版 ---------------------
-print_info "清理 deb 目录旧包，只保留每个软件的最新deb ..."
-for pkg in $(ls ./deb/*.deb 2>/dev/null | sed 's#.*/##;s/_.*//;' | sort -u); do
-    newest=$(ls ./deb/${pkg}_*.deb 2>/dev/null | sort -V | tail -n1)
-    for f in ./deb/${pkg}_*.deb; do
+print_info "Cleaning old debs in prebuild/deb/ (top-level), only keeping the latest version for each software..."
+cd ${current_dir}/prebuild/deb 2>/dev/null || exit 0
+for pkg in $(ls *.deb 2>/dev/null | sed 's/_.*//;' | sort -u); do
+    newest=$(ls ${pkg}_*.deb 2>/dev/null | sort -V | tail -n1)
+    for f in ${pkg}_*.deb; do
         if [ "$f" != "$newest" ]; then
-            print_info "删除旧包: $f"
+            print_info "Deleting old deb: $f"
             rm -f "$f"
         fi
     done
-    print_info "本次保留: $newest"
+    print_info "Keeping: $newest"
 done
+cd - >/dev/null
+
+for subdir in ${current_dir}/prebuild/deb/*/; do
+    [ -d "$subdir" ] || continue
+    print_info "Cleaning old debs in $subdir, only keeping the latest version for each software..."
+    cd "$subdir" || continue
+    for pkg in $(ls *.deb 2>/dev/null | sed 's/_.*//;' | sort -u); do
+        newest=$(ls ${pkg}_*.deb 2>/dev/null | sort -V | tail -n1)
+        for f in ${pkg}_*.deb; do
+            if [ "$f" != "$newest" ]; then
+                print_info "Deleting old deb: $f"
+                rm -f "$f"
+            fi
+        done
+        print_info "Keeping: $newest"
+    done
+    cd - >/dev/null
+    done
 # ----------------------------------------------------------------------
 
 # Create package
@@ -180,7 +200,7 @@ rm -rf ${output_dir}/DEBIAN > /dev/null 2>&1
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
 if [ ! -d "/opt/zigbee2mqtt" ]; then
-    cp ${current_dir}/zigbee2mqtt.service /etc/systemd/system/zigbee2mqtt.service
+    cp ${current_dir}/prebuild/zigbee2mqtt.service /etc/systemd/system/zigbee2mqtt.service
 
     print_info "Build zigbee-herdsman ..."
     mkdir -p /opt/zigbee-herdsman
@@ -219,8 +239,8 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     #npm ci
     #pnpm i --frozen-lockfile
 
-    cp ${current_dir}/configuration_zigate.yaml /opt/zigbee2mqtt/data/configuration_zigate.yaml
-    cp ${current_dir}/configuration_blz.yaml /opt/zigbee2mqtt/data/configuration_blz.yaml
+    cp ${current_dir}/prebuild/configuration_zigate.yaml /opt/zigbee2mqtt/data/configuration_zigate.yaml
+    cp ${current_dir}/prebuild/configuration_blz.yaml /opt/zigbee2mqtt/data/configuration_blz.yaml
     #npm run build
 else
     cd /opt/zigbee-herdsman
@@ -242,22 +262,29 @@ fi
 
 systemctl daemon-reload
 
-if [ -f "${current_dir}/zigee2mqtt_blz_reset.sh" ]; then
+if [ -f "${current_dir}/prebuild/zigee2mqtt_blz_reset.sh" ]; then
     mkdir -p /opt/zigbee2mqtt/scripts/
-    cp ${current_dir}/zigee2mqtt_blz_reset.sh /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
+    cp ${current_dir}/prebuild/zigee2mqtt_blz_reset.sh /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
     chmod +x /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh
+fi
+
+# Install permit-on-passlist script (startup is handled by systemd ExecStartPost)
+if [ -f "${current_dir}/prebuild/z2m-permit-on-passlist.sh" ]; then
+    mkdir -p /opt/zigbee2mqtt/scripts/
+    cp ${current_dir}/prebuild/z2m-permit-on-passlist.sh /opt/zigbee2mqtt/scripts/z2m-permit-on-passlist.sh
+    chmod +x /opt/zigbee2mqtt/scripts/z2m-permit-on-passlist.sh
 fi
 
 mkdir -p ${output_dir}/lib/thirdreality/archives_zigbee2mqtt
 mkdir -p ${output_dir}/lib/thirdreality/conf
 
 print_info "Backup mosquitto debs ..."
-cp ${current_dir}/deb/mosquitto/*.deb ${output_dir}/lib/thirdreality/archives_zigbee2mqtt/
+cp ${current_dir}/prebuild/deb/mosquitto/*.deb ${output_dir}/lib/thirdreality/archives_zigbee2mqtt/ 2>/dev/null || true
 
 print_info "Backup nodejs debs ..."
-cp ${current_dir}/deb/nodejs/*.deb ${output_dir}/lib/thirdreality/archives_zigbee2mqtt/
+cp ${current_dir}/prebuild/deb/nodejs/*.deb ${output_dir}/lib/thirdreality/archives_zigbee2mqtt/ 2>/dev/null || true
 
-cp ${current_dir}/post-fix-zigbee2mqtt.sh ${output_dir}/lib/thirdreality/
+cp ${current_dir}/prebuild/post-fix-zigbee2mqtt.sh ${output_dir}/lib/thirdreality/
 
 print_info "Backup zigbee2mqtt ..."
 
@@ -285,11 +312,11 @@ cp /etc/systemd/system/zigbee2mqtt.service ${output_dir}/etc/systemd/system/zigb
 
 #
 print_info "backup default config files..."
-cp ${current_dir}/configuration_zigate.yaml ${output_dir}/lib/thirdreality/conf/configuration_zigate.yaml.default
-cp ${current_dir}/configuration_blz.yaml ${output_dir}/lib/thirdreality/conf/configuration_blz.yaml.default
+cp ${current_dir}/prebuild/configuration_zigate.yaml ${output_dir}/lib/thirdreality/conf/configuration_zigate.yaml.default
+cp ${current_dir}/prebuild/configuration_blz.yaml ${output_dir}/lib/thirdreality/conf/configuration_blz.yaml.default
 #cp ${current_dir}/configuration_standalone.yaml ${output_dir}/lib/thirdreality/conf/configuration_standalone.yaml.default
 
-cp ${current_dir}/mosquitto.conf ${output_dir}/lib/thirdreality/conf/mosquitto.conf.default
+cp ${current_dir}/prebuild/mosquitto.conf ${output_dir}/lib/thirdreality/conf/mosquitto.conf.default
 
 # ---------------------
 print_info "Start to build zigbee-mqtt_${version}.deb ..."

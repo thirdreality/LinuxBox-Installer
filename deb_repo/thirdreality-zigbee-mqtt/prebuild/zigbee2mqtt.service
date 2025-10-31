@@ -1,0 +1,25 @@
+[Unit]
+Description=zigbee2mqtt
+After=network.target
+
+[Service]
+Environment=NODE_ENV=production
+Type=notify
+ExecStartPre=-/bin/bash -c 'if [ -f /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh ]; then /opt/zigbee2mqtt/scripts/zigbee2mqtt_blz_reset.sh; fi'
+ExecStart=/usr/bin/node index.js
+WorkingDirectory=/opt/zigbee2mqtt
+StandardOutput=inherit
+# Or use StandardOutput=null if you don't want Zigbee2MQTT messages filling syslog, for more options see systemd.exec(5)
+StandardError=inherit
+#WatchdogSec=10s
+Restart=always
+RestartSec=10s
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+# After main process is considered started, delay and then trigger permit-if-passlist script in background
+ExecStartPost=-/bin/bash -lc 'if [ -x /opt/zigbee2mqtt/scripts/z2m-permit-on-passlist.sh ]; then ( sleep 8; /opt/zigbee2mqtt/scripts/z2m-permit-on-passlist.sh ) & fi'
+
+[Install]
+WantedBy=multi-user.target
+
