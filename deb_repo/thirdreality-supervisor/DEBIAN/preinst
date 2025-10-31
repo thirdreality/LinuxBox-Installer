@@ -1,6 +1,14 @@
 #!/bin/bash
 
-if [[ "$(/usr/bin/systemctl is-active supervisor.service)" == "active" ]]; then
-    echo "Stopping supervisor.service"
-    /usr/bin/systemctl stop supervisor.service
-fi
+set -e
+
+case "$1" in
+    install|upgrade)
+        if command -v systemctl >/dev/null 2>&1; then
+            if [[ "$(/usr/bin/systemctl is-active supervisor.service 2>/dev/null || true)" == "active" ]]; then
+                echo "Stopping supervisor.service"
+                /usr/bin/systemctl stop supervisor.service || true
+            fi
+        fi
+        ;;
+esac

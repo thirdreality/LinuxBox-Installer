@@ -4,7 +4,7 @@ function info { echo -e "\e[32m[info] $*\e[39m"; }
 function warn  { echo -e "\e[33m[warn] $*\e[39m"; }
 function error { echo -e "\e[31m[error] $*\e[39m"; exit 1; }
 
-# 检查是安装还是升级
+# Check install or upgrade
 if [ "$1" = "configure" ]; then
 
 	if [ -f "/lib/armbian/factory-reset.sh" ]; then
@@ -19,20 +19,20 @@ if [ "$1" = "configure" ]; then
 		chmod +x /usr/local/bin/supervisor > /dev/null 2>&1
 	fi
 
-	if [ -f "/etc/systemd/system/supervisor.service" ]; then
-		/usr/bin/systemctl enable supervisor.service
-        /usr/bin/systemctl start supervisor.service
-	fi
+    # Reload systemd units before enabling/starting services
+    /usr/bin/systemctl daemon-reload > /dev/null 2>&1
 
-	if [ -f "/etc/systemd/system/btgatt-config.service" ]; then
+    if [ -f "/etc/systemd/system/supervisor.service" ]; then
+        /usr/bin/systemctl enable --now supervisor.service
+    fi
+
+    if [ -f "/etc/systemd/system/btgatt-config.service" ]; then
 		/usr/bin/systemctl disable btgatt-config.service
 	fi
 
-	/usr/bin/systemctl daemon-reload > /dev/null 2>&1
-
 	# Update version information in /etc/t3r-release
 	update_t3r_version() {
-		local armbian_version="05"  # Configurable version number
+		local armbian_version="14"  # Configurable version number
 		
 		if [ -f "/etc/t3r-release" ]; then
 			info "Updating /etc/t3r-release version information..."

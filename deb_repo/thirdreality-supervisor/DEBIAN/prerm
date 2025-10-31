@@ -1,14 +1,25 @@
 #!/bin/bash
 set -e
 
-# 停止服务
-if [ "$1" = "remove" ]; then
-    if [[ "$(/usr/bin/systemctl is-active supervisor.service)" == "active" ]]; then
-        echo "Stopping supervisor.service"
-        /usr/bin/systemctl stop supervisor.service
-        /usr/bin/systemctl disable supervisor.service
-    fi
-    echo "Remove success."
-fi
+case "$1" in
+    remove|purge)
+        if command -v systemctl >/dev/null 2>&1; then
+            if [[ "$(/usr/bin/systemctl is-active supervisor.service 2>/dev/null || true)" == "active" ]]; then
+                echo "Stopping supervisor.service"
+                /usr/bin/systemctl stop supervisor.service || true
+            fi
+            /usr/bin/systemctl disable supervisor.service || true
+        fi
+        echo "Remove success."
+        ;;
+    upgrade)
+        if command -v systemctl >/dev/null 2>&1; then
+            if [[ "$(/usr/bin/systemctl is-active supervisor.service 2>/dev/null || true)" == "active" ]]; then
+                echo "Stopping supervisor.service for upgrade"
+                /usr/bin/systemctl stop supervisor.service || true
+            fi
+        fi
+        ;;
+esac
 
 exit 0
