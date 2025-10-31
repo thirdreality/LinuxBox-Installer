@@ -134,10 +134,6 @@ if [ ! -d "${current_dir}/ot-br-posix" ]; then
     # OTBR_VENDOR_NAME="Home Assistant" OTBR_PRODUCT_NAME="OpenThread Border Router"
     cd "${current_dir}/ot-br-posix"; WEB_GUI=0 ./script/bootstrap
     cd "${current_dir}/ot-br-posix"; INFRA_IF_NAME=wlan0 WEB_GUI=0 ./script/setup
-
-    cp ${current_dir}/otbr-agent /etc/default/
-
-    cat /etc/default/otbr-agent
 fi
 
 cd ${current_dir}/ot-br-posix
@@ -151,17 +147,7 @@ cd ${current_dir}
 
 # find /usr -type f -newermt $(date +'%Y-%m-%d') ! -newermt $(date -d '1 day' +'%Y-%m-%d')
 
-cp ${current_dir}/otbr-agent /etc/default/otbr-agent
-
-mkdir -p /lib/thirdreality/
-mkdir -p /lib/systemd/system/
-cp ${current_dir}/hubv3-otbr-agent.sh /lib/thirdreality/hubv3-otbr-agent.sh
-cp ${current_dir}/otbr_database /lib/thirdreality/otbr_database
-
-cp ${current_dir}/hubv3-otbr-agent.service /lib/systemd/system/hubv3-otbr-agent.service
-
-chmod +x /lib/thirdreality/hubv3-otbr-agent.sh
-chmod +x /lib/thirdreality/otbr_database
+## pure packaging: no writes to system paths here
 
 print_info "Copy openthread files ..."
 
@@ -183,23 +169,23 @@ else
     echo "Error: file /usr/lib/libdns_sd.so.1 is missing!"
 fi
 
-cp ${current_dir}/otbr-agent-init.sh ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
-cp ${current_dir}/hubv3-otbr-agent.sh ${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh
-cp ${current_dir}/otbr_database ${output_dir}/usr/lib/thirdreality/otbr_database
+cp ${current_dir}/prebuild/otbr-agent-init.sh ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
+cp ${current_dir}/prebuild/hubv3-otbr-agent.sh ${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh
+cp ${current_dir}/prebuild/otbr_database ${output_dir}/usr/lib/thirdreality/otbr_database
 
 chmod +x ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
 chmod +x ${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh
 chmod +x ${output_dir}/usr/lib/thirdreality/otbr_database
 
 cp /usr/lib/systemd/system/otbr-agent.service ${output_dir}/usr/lib/systemd/system/
-cp /usr/lib/systemd/system/hubv3-otbr-agent.service ${output_dir}/usr/lib/systemd/system/
+cp ${current_dir}/prebuild/hubv3-otbr-agent.service ${output_dir}/usr/lib/systemd/system/hubv3-otbr-agent.service
 
 
 # 在otbr-agent.service的ExecStartPre=/usr/sbin/service mdns start之前添加ExecStartPre=/usr/lib/thirdreality/otbr-agent-init.sh
 sed -i '/ExecStartPre=\/usr\/sbin\/service mdns start/i ExecStartPre=/usr/lib/thirdreality/otbr-agent-init.sh' ${output_dir}/usr/lib/systemd/system/otbr-agent.service
 
 if [ -d "/usr/share/otbr-web" ];then
-    cp /usr/share/otbr-web ${output_dir}/usr/share/otbr-web
+    cp -R /usr/share/otbr-web ${output_dir}/usr/share/otbr-web
 fi
 
 if [ -f "/usr/lib/libnss_mdns-0.2.so" ];then 
