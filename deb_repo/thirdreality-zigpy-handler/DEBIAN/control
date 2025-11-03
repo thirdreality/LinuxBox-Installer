@@ -1,7 +1,0 @@
-Package: thirdreality-zigpy-handler
-Version: 2025.09.10
-Section: utils
-Priority: optional
-Architecture: arm64
-Maintainer: guoping.liu <guoping.liu@3reality.com>
-Description: A tool for update zhaquirks/thirdreality/ for ThirdReality LinuxBox Dev Edition.

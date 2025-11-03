@@ -113,6 +113,9 @@ if [[ "$CURRENT_PYTHON" < "3.13.0" ]]; then
         done
     fi
 
+
+    apt-get install libsqlite3-dev
+
     # https://www.python.org/ftp/python/3.13.3/Python-3.13.3.tgz
     if [ ! -e "${current_dir}/Python-$INSTALL_PYTHON_VERSION.tgz" ]; then
         echo "Downloading Python $INSTALL_PYTHON_VERSION ..."

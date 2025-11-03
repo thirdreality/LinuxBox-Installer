@@ -1,8 +1,0 @@
-Package: thirdreality-hassio-config
-Version: 2025.3.4
-Section: utils
-Priority: optional
-Architecture: arm64
-Maintainer: Your Name <guoping.liu@3reality.com>
-Description: A custom hassio-config package, prepare offline installation.
-
