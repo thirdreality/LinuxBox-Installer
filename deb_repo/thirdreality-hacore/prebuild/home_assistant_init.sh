@@ -15,7 +15,7 @@ function get_zigpy_ieee_from_device {
             local TMP_INFO="/tmp/zigpy_info.tmp"
             echo "[INFO] Detecting Zigbee radio type..."
             
-            # 检查是否存在 R3Backup 目录和设置文件，如果存在则跳过 change-channel 操作
+            # 部分操作非常耗时。检查是否存在 R3Backup 目录和设置文件，如果存在则跳过 change-channel 操作
             local SKIP_AUTO_CONFIGRATION=false
             if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
                 local BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
@@ -52,26 +52,26 @@ function get_zigpy_ieee_from_device {
                 echo "Radio Type: blz" >> "$ZHA_CONF"
                 rm -f "$TMP_INFO"
                 sync
-            elif zigpy radio zigate /dev/ttyAML3 info > "$TMP_INFO" 2>&1; then
-                echo "[INFO] ZiGate radio detected, checking current channel..."
-                # 修正channel字段提取逻辑，确保能正确获取Channel值
-                local CHANNEL=$(grep -i '^channel:' "$TMP_INFO" | awk '{print $2}' | xargs)
-                if [ "$CHANNEL" != "$ZIGPY_CHANNEL" ] && [ "$SKIP_AUTO_CONFIGRATION" = false ]; then
-                    echo "[INFO] Current channel is $CHANNEL, switching to $ZIGPY_CHANNEL..."
-                    zigpy radio zigate /dev/ttyAML3 change-channel --channel $ZIGPY_CHANNEL
-                    echo "[INFO] Channel switched, retrieving channel info again..."
-                    zigpy radio zigate /dev/ttyAML3 info > "$TMP_INFO" 2>&1
-                elif [ "$SKIP_AUTO_CONFIGRATION" = true ]; then
-                    echo "[INFO] Skipping channel change due to backup files presence"
-                else
-                    echo "[INFO] Channel is already set to $ZIGPY_CHANNEL, no change needed"
-                fi
-                echo "[INFO] Detection complete, saving configuration..."
-                cat "$TMP_INFO" > "$ZHA_CONF"
-                echo "ZiGate radio detected. Output saved to $ZHA_CONF"
-                echo "Radio Type: zigate" >> "$ZHA_CONF"
-                rm -f "$TMP_INFO"
-                sync
+            # elif zigpy radio zigate /dev/ttyAML3 info > "$TMP_INFO" 2>&1; then
+            #     echo "[INFO] ZiGate radio detected, checking current channel..."
+            #     # 修正channel字段提取逻辑，确保能正确获取Channel值
+            #     local CHANNEL=$(grep -i '^channel:' "$TMP_INFO" | awk '{print $2}' | xargs)
+            #     if [ "$CHANNEL" != "$ZIGPY_CHANNEL" ] && [ "$SKIP_AUTO_CONFIGRATION" = false ]; then
+            #         echo "[INFO] Current channel is $CHANNEL, switching to $ZIGPY_CHANNEL..."
+            #         zigpy radio zigate /dev/ttyAML3 change-channel --channel $ZIGPY_CHANNEL
+            #         echo "[INFO] Channel switched, retrieving channel info again..."
+            #         zigpy radio zigate /dev/ttyAML3 info > "$TMP_INFO" 2>&1
+            #     elif [ "$SKIP_AUTO_CONFIGRATION" = true ]; then
+            #         echo "[INFO] Skipping channel change due to backup files presence"
+            #     else
+            #         echo "[INFO] Channel is already set to $ZIGPY_CHANNEL, no change needed"
+            #     fi
+            #     echo "[INFO] Detection complete, saving configuration..."
+            #     cat "$TMP_INFO" > "$ZHA_CONF"
+            #     echo "ZiGate radio detected. Output saved to $ZHA_CONF"
+            #     echo "Radio Type: zigate" >> "$ZHA_CONF"
+            #     rm -f "$TMP_INFO"
+            #     sync
             else
                 echo "Error: Failed to detect any supported radio type"
                 rm -rf "$ZHA_CONF" > /dev/null 2>&1 || true
@@ -99,6 +99,20 @@ function enable_zha_for_home_assistant {
             return 1
         fi
 
+        # 检查 ZHA 是否已经配置过， 默认的config中没有zha和mqtt配置
+        # 如果 core.config_entries 中已经存在 ZHA 配置，说明已经初始化过
+        # 升级时不应该再次执行，避免修改用户已有配置
+        local config_entries="/var/lib/homeassistant/homeassistant/.storage/core.config_entries"
+        if [ -f "$config_entries" ]; then
+            # 检查是否已存在 ZHA 配置条目
+            if grep -q '"domain": "zha"' "$config_entries" 2>/dev/null; then
+                echo "[INFO] ZHA configuration already exists, skipping to preserve user data"
+                echo "[INFO] This is likely an upgrade scenario, not a fresh install"
+                return 0
+            fi
+        fi
+
+        echo "[INFO] ZHA not configured yet, running initialization..."
         /srv/homeassistant/bin/home_assistant_zha_enable.py
         sync
     fi

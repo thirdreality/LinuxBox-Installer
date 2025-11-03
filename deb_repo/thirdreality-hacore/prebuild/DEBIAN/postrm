@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
+# postrm script for thirdreality-hacore
+# 改进版本 - 安全清理，不影响其他服务
+
 set -e
 
-# 停止服务
-if [ "$1" = "remove" ]; then
+log_info() {
+    echo "[INFO] $*" >&2
+}
 
+log_warn() {
+    echo "[WARN] $*" >&2
+}
+
+# 清理应用文件
+cleanup_application_files() {
+    log_info "Cleaning up application files..."
+    
+    # 清理配置文件
     if [ -f "/var/lib/homeassistant/zha.conf" ]; then
         rm -rf /var/lib/homeassistant/zha.conf || true
     fi
@@ -12,9 +25,74 @@ if [ "$1" = "remove" ]; then
         rm -rf /var/lib/homeassistant/zha.conf.bak || true
     fi
     
+    # 清理临时文件
     rm -rf /tmp/chip_kvs || true
+    
+    # 清理应用目录（但保留用户数据）
     rm -rf /srv/homeassistant || true
-    rm -rf /srv || true
-fi
+    rm -rf /srv/matter_server || true
+    
+    # 只在目录为空时删除 /srv（避免影响其他服务）
+    if [ -d "/srv" ]; then
+        # 检查 /srv 是否为空
+        if [ -z "$(ls -A /srv 2>/dev/null)" ]; then
+            rmdir /srv 2>/dev/null || true
+            log_info "Removed empty /srv directory"
+        else
+            log_warn "/srv directory not empty, keeping it (other services may be using it)"
+        fi
+    fi
+}
+
+# 清理升级备份（可选）
+cleanup_backups() {
+    if [ -d "/var/lib/homeassistant/backup-"* ]; then
+        log_info "Upgrade backups found in /var/lib/homeassistant/"
+        log_info "To remove old backups manually, run:"
+        log_info "  rm -rf /var/lib/homeassistant/backup-*"
+    fi
+}
+
+# 保留用户数据提示
+show_data_retention_info() {
+    if [ -d "/var/lib/homeassistant" ]; then
+        log_info "=============================================="
+        log_info "User data preserved in /var/lib/homeassistant/"
+        log_info "This includes:"
+        log_info "  - Home Assistant configuration"
+        log_info "  - Device databases"
+        log_info "  - Upgrade backups"
+        log_info "  - Upgrade logs"
+        log_info ""
+        log_info "To completely remove all data, run:"
+        log_info "  rm -rf /var/lib/homeassistant"
+        log_info "=============================================="
+    fi
+}
+
+# 主逻辑
+main() {
+    if [ "$1" = "remove" ]; then
+        log_info "Removing thirdreality-hacore package..."
+        cleanup_application_files
+        cleanup_backups
+        show_data_retention_info
+        
+    elif [ "$1" = "purge" ]; then
+        log_info "Purging thirdreality-hacore package and all data..."
+        cleanup_application_files
+        
+        # 完全清理用户数据
+        log_warn "Purging all user data..."
+        rm -rf /var/lib/homeassistant || true
+        rm -rf /data/homeassistant || true
+        rm -rf /updates || true
+        
+        log_info "All data has been removed"
+    fi
+}
+
+main "$@"
 
 exit 0
+

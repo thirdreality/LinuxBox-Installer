@@ -1,81 +1,301 @@
 #!/bin/bash
+# postinst script for thirdreality-hacore
+# 改进版本 - 支持优雅升级，保留用户配置
+
 set -e
+
+# 彩色日志函数
 function info { echo -e "\e[32m[info] $*\e[39m"; }
 function warn  { echo -e "\e[33m[warn] $*\e[39m"; }
 function error { echo -e "\e[31m[error] $*\e[39m"; exit 1; }
 
-# 检查是安装还是升级
-if [ "$1" = "configure" ]; then
-	rm -rf /usr/share/hassio/homeassistant/zha.conf
-	rm -rf /usr/share/hassio/homeassistant/zha.conf.bak
+# 获取升级信息
+get_upgrade_info() {
+    UPGRADE_LOG=""
+    BACKUP_DIR=""
+    
+    if [ -f "/tmp/hacore-upgrade-log-path.txt" ]; then
+        UPGRADE_LOG=$(cat /tmp/hacore-upgrade-log-path.txt)
+    fi
+    
+    if [ -f "/tmp/hacore-upgrade-backup-path.txt" ]; then
+        BACKUP_DIR=$(cat /tmp/hacore-upgrade-backup-path.txt)
+    fi
+}
 
-	rm -rf /var/lib/homeassistant/zha.conf
-	rm -rf /var/lib/homeassistant/zha.conf.bak
+# 记录升级日志
+log_upgrade() {
+    if [ -n "$UPGRADE_LOG" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - $*" >> "$UPGRADE_LOG"
+    fi
+}
 
-	mkdir -p /var/lib/homeassistant
-	mkdir -p /var/lib/homeassistant/homeassistant
-	mkdir -p /var/lib/homeassistant/matter_server
+# 首次安装的配置清理
+handle_fresh_install() {
+    info "Performing fresh installation configuration..."
+    
+    # 清理旧的配置文件（仅在全新安装时）
+    rm -rf /usr/share/hassio/homeassistant/zha.conf* 2>/dev/null || true
+    rm -rf /var/lib/homeassistant/zha.conf 2>/dev/null || true
+    rm -rf /var/lib/homeassistant/zha.conf.bak 2>/dev/null || true
+    
+    log_upgrade "Fresh install: Cleaned old configuration files"
+}
 
+# 升级时的配置处理
+handle_upgrade_config() {
+    local old_version="$1"
+    info "Configuring upgrade from version $old_version..."
+    
+    # 备份现有配置（如果尚未备份）
+    if [ -f "/var/lib/homeassistant/zha.conf" ] && [ -n "$BACKUP_DIR" ]; then
+        if [ ! -f "$BACKUP_DIR/zha.conf" ]; then
+            cp /var/lib/homeassistant/zha.conf "$BACKUP_DIR/" || true
+            log_upgrade "Backed up zha.conf during upgrade"
+        fi
+    fi
+    
+    # 检查是否需要清理旧配置（仅针对特定版本升级）
+    # 例如：从某个有问题的版本升级时才清理
+    # if dpkg --compare-versions "$old_version" eq "2025.9.0"; then
+    #     warn "Cleaning problematic config from version $old_version"
+    #     rm -rf /var/lib/homeassistant/zha.conf.bak || true
+    # fi
+    
+    log_upgrade "Configuration preserved during upgrade"
+}
+
+# 创建必要的目录结构
+create_directories() {
+    info "Creating necessary directories..."
+    
+    mkdir -p /var/lib/homeassistant
+    mkdir -p /var/lib/homeassistant/homeassistant
+    mkdir -p /var/lib/homeassistant/matter_server
+    mkdir -p /var/lib/homeassistant/upgrade-logs
+    
+    # 创建运行时目录（使用更安全的权限）
     mkdir -p /data /updates
-    chmod 777 /data /updates
-    touch /tmp/chip_kvs && chmod 766 /tmp/chip_kvs || { echo "[WARN]Failed to setup directories"; }	
+    chmod 755 /data /updates
+    
+    # 创建临时文件（使用更安全的权限）
+    if [ ! -f "/tmp/chip_kvs" ]; then
+        touch /tmp/chip_kvs && chmod 660 /tmp/chip_kvs || {
+            warn "Failed to setup /tmp/chip_kvs"
+        }
+    fi
+    
+    log_upgrade "Directories created successfully"
+}
 
-	if [ -e "/srv/homeassistant/bin/home_assistant_boot_check.sh" ]; then
-		chmod +x /srv/homeassistant/bin/home_assistant_boot_check.sh > /dev/null 2>&1
-	fi
+# 设置脚本权限
+setup_script_permissions() {
+    info "Setting up script permissions..."
+    
+    local scripts=(
+        "home_assistant_boot_check.sh"
+        "home_assistant_blz_reset.sh"
+        "home_assistant_zha_enable.py"
+        "home_assistant_zigbee_fix.sh"
+        "home_assistant_init.sh"
+        "home_assistant_matter_fix.sh"
+        "home_assistant_boot_check.py"
+    )
+    
+    for script in "${scripts[@]}"; do
+        if [ -e "/srv/homeassistant/bin/$script" ]; then
+            chmod +x "/srv/homeassistant/bin/$script" > /dev/null 2>&1 || true
+        fi
+    done
+    
+    log_upgrade "Script permissions configured"
+}
 
-	if [ -e "/srv/homeassistant/bin/home_assistant_blz_reset.sh" ]; then
-		chmod +x /srv/homeassistant/bin/home_assistant_blz_reset.sh > /dev/null 2>&1
-	fi
+# 更新 Zigbee 默认配置
+update_zigbee_config() {
+    local is_fresh_install="$1"
+    
+    # 只在首次安装时执行初始化脚本
+    # 升级时不执行，避免修改用户已有配置
+    if [ "$is_fresh_install" = "true" ]; then
+        info "Update zigbee default config (fresh install)..."
+        
+        if [ -e "/srv/homeassistant/bin/home_assistant_init.sh" ]; then
+            chmod +x /srv/homeassistant/bin/home_assistant_init.sh > /dev/null 2>&1
 
-	if [ -e "/srv/homeassistant/bin/home_assistant_zha_enable.py" ]; then
-		chmod +x /srv/homeassistant/bin/home_assistant_zha_enable.py > /dev/null 2>&1
-	fi
+            if [ -e "/var/lib/homeassistant/homeassistant/configuration.yaml" ]; then
+                /srv/homeassistant/bin/home_assistant_init.sh > /dev/null 2>&1 || {
+                    warn "home_assistant_init.sh failed, but continuing..." 
+                    log_upgrade "WARNING: home_assistant_init.sh failed"
+                }
+                log_upgrade "Zigbee configuration updated (fresh install)"
+            else
+                info "No existing configuration.yaml, skipping zigbee config update"
+            fi
+        fi
+    else
+        info "Skipping zigbee config update during upgrade to preserve user data"
+        log_upgrade "Skipped zigbee initialization during upgrade"
+    fi
+}
 
-	if [ -e "/srv/homeassistant/bin/home_assistant_z2m_enable.py" ]; then
-		chmod +x /srv/homeassistant/bin/home_assistant_z2m_enable.py > /dev/null 2>&1
-	fi
+# 修复 Matter Server vendorId
+fix_matter_vendor_id() {
+    info "Checking Matter Server vendorId..."
+    
+    if [ -e "/srv/homeassistant/bin/home_assistant_matter_fix.sh" ]; then
+        chmod +x /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1
 
-	if [ -e "/srv/homeassistant/bin/home_assistant_zigbee_fix.sh" ]; then
-		chmod +x /srv/homeassistant/bin/home_assistant_zigbee_fix.sh > /dev/null 2>&1
-	fi
+        if [ -e "/var/lib/homeassistant/matter_server/chip.json" ]; then
+            /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1 || {
+                warn "home_assistant_matter_fix.sh failed, but continuing..." 
+                log_upgrade "WARNING: home_assistant_matter_fix.sh failed"
+            }
+            log_upgrade "Matter Server vendorId fixed"
+        fi
+    fi
+}
 
-	info "Update zigbee default config ..."
-	if [ -e "/srv/homeassistant/bin/home_assistant_init.sh" ]; then
-		chmod +x /srv/homeassistant/bin/home_assistant_init.sh > /dev/null 2>&1
+# 配置并启动服务
+configure_services() {
+    info "Configuring systemd services..."
+    
+    /usr/bin/systemctl daemon-reload
+    /usr/bin/systemctl enable home-assistant.service
+    /usr/bin/systemctl enable matter-server.service
+    
+    log_upgrade "Services enabled"
+}
 
-		if [ -e "/var/lib/homeassistant/homeassistant/configuration.yaml" ]; then
-			/srv/homeassistant/bin/home_assistant_init.sh > /dev/null 2>&1 || {
-        		echo "[WARN]home_assistant_init.sh failed, but continuing..." 
-    		}
-		fi
-	fi
-
-	# Fix matter server vendorId
-	if [ -e "/srv/homeassistant/bin/home_assistant_matter_fix.sh" ]; then
-		chmod +x /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1
-
-		if [ -e "/var/lib/homeassistant/matter_server/chip.json" ]; then
-			/srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1 || {
-        		echo "[WARN]home_assistant_matter_fix.sh failed, but continuing..." 
-    		}
-		fi
-	fi
-
-	/usr/bin/systemctl daemon-reload
-	/usr/bin/systemctl enable home-assistant.service
-	/usr/bin/systemctl enable matter-server.service
-
-	msg=$(iw dev wlan0 link 2>&1)
-    if echo "$msg" | grep -q "Connected"; then
+# 检查网络连接并启动服务
+start_services_if_network_ready() {
+    info "Checking network connectivity..."
+    
+    NETWORK_READY=false
+    
+    # 检查 WiFi 连接
+    if command -v iw >/dev/null 2>&1; then
+        msg=$(iw dev wlan0 link 2>&1)
+        if echo "$msg" | grep -q "Connected"; then
+            NETWORK_READY=true
+            info "WiFi network detected"
+        fi
+    fi
+    
+    # 检查有线网络（如果 WiFi 未连接）
+    if [ "$NETWORK_READY" = false ]; then
+        for iface in eth0 enp* eno*; do
+            if ip link show "$iface" 2>/dev/null | grep -q "state UP"; then
+                NETWORK_READY=true
+                info "Wired network detected on $iface"
+                break
+            fi
+        done
+    fi
+    
+    if [ "$NETWORK_READY" = true ]; then
+        info "Network is ready, starting services..."
         /usr/bin/systemctl start home-assistant.service
         /usr/bin/systemctl start matter-server.service
-	fi
-	
-	info "Install HomeAssistant-Core success."
-elif [ "$1" = "fix-dependency" ]; then
-    echo "fix-dependency"
-fi
+        log_upgrade "Services started successfully"
+        
+        # 等待服务启动
+        sleep 5
+        
+        # 验证服务状态
+        if ! systemctl is-active --quiet home-assistant.service; then
+            warn "Home Assistant service may not have started correctly"
+            warn "Check logs: journalctl -u home-assistant.service"
+            log_upgrade "WARNING: Home Assistant service not active after start"
+        fi
+        
+        if ! systemctl is-active --quiet matter-server.service; then
+            warn "Matter Server service may not have started correctly"
+            warn "Check logs: journalctl -u matter-server.service"
+            log_upgrade "WARNING: Matter Server service not active after start"
+        fi
+    else
+        info "Network not ready, services will start automatically on next boot"
+        log_upgrade "Network not ready, deferred service start"
+    fi
+}
+
+# 清理升级临时文件
+cleanup_upgrade_files() {
+    rm -f /tmp/hacore-upgrade-log-path.txt
+    rm -f /tmp/hacore-upgrade-backup-path.txt
+}
+
+# 显示升级完成信息
+show_completion_message() {
+    local old_version="$1"
+    
+    echo ""
+    info "========================================"
+    if [ -z "$old_version" ]; then
+        info "Home Assistant Core installation completed successfully!"
+    else
+        info "Home Assistant Core upgrade completed successfully!"
+        info "Upgraded from version: $old_version"
+    fi
+    
+    if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+        info "Backup location: $BACKUP_DIR"
+    fi
+    
+    if [ -n "$UPGRADE_LOG" ] && [ -f "$UPGRADE_LOG" ]; then
+        info "Upgrade log: $UPGRADE_LOG"
+    fi
+    
+    info "========================================"
+    echo ""
+}
+
+# 主配置逻辑
+main() {
+    if [ "$1" = "configure" ]; then
+        get_upgrade_info
+        
+        OLD_VERSION="$2"
+        
+        # 判断是首次安装还是升级
+        if [ -z "$OLD_VERSION" ]; then
+            # 首次安装
+            log_upgrade "Starting fresh installation"
+            handle_fresh_install
+        else
+            # 升级
+            log_upgrade "Starting upgrade from version $OLD_VERSION"
+            handle_upgrade_config "$OLD_VERSION"
+        fi
+        
+        # 通用配置步骤
+        create_directories
+        setup_script_permissions
+        
+        # 判断是否是首次安装
+        if [ -z "$OLD_VERSION" ]; then
+            update_zigbee_config "true"  # 首次安装
+        else
+            update_zigbee_config "false"  # 升级，跳过初始化
+        fi
+        
+        fix_matter_vendor_id
+        configure_services
+        start_services_if_network_ready
+        
+        # 完成升级
+        log_upgrade "Upgrade completed successfully"
+        show_completion_message "$OLD_VERSION"
+        cleanup_upgrade_files
+        
+    elif [ "$1" = "fix-dependency" ]; then
+        info "fix-dependency"
+        log_upgrade "Running fix-dependency"
+    fi
+}
+
+main "$@"
 
 exit 0
 
