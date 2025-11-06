@@ -31,10 +31,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.10.2"
+export HOME_ASSISTANT_VERSION="2025.10.4"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20251001.2" 
+export FRONTEND_VERSION="20251001.4" 
 
 #python-matter-server==8.1.0
 export MATTER_SERVER_VERSION="8.1.1"
@@ -89,7 +89,20 @@ download_file() {
     local url=$1
     local output=$2
     if [[ ! -f "$output" ]]; then
-        curl -Lo "$output" "$url" || { print_error "Failed to download $url"; exit 1; }
+        curl -L \
+             --http1.1 \
+             --fail \
+             --retry 5 \
+             --retry-delay 2 \
+             --connect-timeout 10 \
+             --max-time 600 \
+             -H "User-Agent: wget" \
+             -H "Accept: application/octet-stream" \
+             -o "$output" "$url" || {
+            print_error "Failed to download $url via curl"
+            rm -f "$output"
+            exit 1
+        }
         chmod +x "$output"
     fi
 }

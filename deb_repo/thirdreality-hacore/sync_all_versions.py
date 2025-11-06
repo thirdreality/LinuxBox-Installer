@@ -272,9 +272,9 @@ class HomeAssistantVersionSyncer:
     def update_control_file_version(self, ha_version):
         """更新 DEBIAN/control 文件中的版本号"""
         try:
-            control_file = "DEBIAN/control"
+            control_file = "prebuild/DEBIAN/control"
             if not os.path.exists(control_file):
-                print(f"⚠️ DEBIAN/control 文件不存在，跳过更新")
+                print(f"⚠️ prebuild/DEBIAN/control 文件不存在，跳过更新")
                 return False
             
             with open(control_file, 'r', encoding='utf-8') as f:
@@ -291,17 +291,17 @@ class HomeAssistantVersionSyncer:
                     with open(control_file, 'w', encoding='utf-8') as f:
                         f.write(updated_content)
                     
-                    print(f"✅ 已更新 DEBIAN/control 版本: {current_version} -> {ha_version}")
+                    print(f"✅ 已更新 prebuild/DEBIAN/control 版本: {current_version} -> {ha_version}")
                     return True
                 else:
-                    print(f"ℹ️ DEBIAN/control 版本已是最新: {ha_version}")
+                    print(f"ℹ️ prebuild/DEBIAN/control 版本已是最新: {ha_version}")
                     return False
             else:
-                print("❌ 无法在 DEBIAN/control 中找到版本号")
+                print("❌ 无法在 prebuild/DEBIAN/control 中找到版本号")
                 return False
                 
         except Exception as e:
-            print(f"❌ 更新 DEBIAN/control 失败: {e}")
+            print(f"❌ 更新 prebuild/DEBIAN/control 失败: {e}")
             return False
 
     def update_versions_in_build_script(self, versions):
