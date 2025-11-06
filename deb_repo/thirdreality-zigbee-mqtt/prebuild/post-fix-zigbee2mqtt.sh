@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Post-installation script for ThirdReality Zigbee2MQTT
-# Purpose: Install dependencies, configure mosquitto and zigbee2mqtt
+# Purpose: Install dependencies, configure Mosquitto and Zigbee2MQTT
 # Version: 1.1.0
 #
 
@@ -27,7 +27,7 @@ install_mosquitto_packages() {
     for pkg in "${MOS_PACKAGES[@]}"; do
         local pkg_files=(${DEFAULT_APT_CACHE}/${pkg})
         if [ ${#pkg_files[@]} -gt 0 ] && [ -f "${pkg_files[0]}" ]; then
-            log "安装 $pkg ..."
+            log "Installing $pkg ..."
             dpkg -i ${DEFAULT_APT_CACHE}/${pkg} 2>&1 | tee -a "$LOG_FILE" || true
         fi
     done
@@ -39,14 +39,14 @@ install_libsystemd_dev() {
     if [ -n "$pkg_file" ]; then
         local new_ver=$(dpkg-deb -f "$pkg_file" Version)
         local cur_ver=$(dpkg-query -W -f='${Version}' libsystemd-dev 2>/dev/null)
-        log "libsystemd-dev 目标版本: $new_ver，已装版本: $cur_ver"
+        log "libsystemd-dev target version: $new_ver, installed version: $cur_ver"
         if [ -z "$cur_ver" ]; then
             dpkg -i "$pkg_file"
         elif dpkg --compare-versions "$cur_ver" lt "$new_ver"; then
             apt-get remove --purge -y libsystemd-dev
             dpkg -i "$pkg_file"
         else
-            log "libsystemd-dev 已是新版本, 跳过"
+            log "libsystemd-dev is up to date, skipping"
         fi
     fi
 }
@@ -56,14 +56,14 @@ install_nodejs() {
     if [ -n "$pkg_file" ]; then
         local new_ver=$(dpkg-deb -f "$pkg_file" Version)
         local cur_ver=$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null)
-        log "nodejs 目标版本: $new_ver，已装版本: $cur_ver"
+        log "nodejs target version: $new_ver, installed version: $cur_ver"
         if [ -z "$cur_ver" ]; then
             dpkg -i "$pkg_file"
         elif dpkg --compare-versions "$cur_ver" lt "$new_ver"; then
             apt-get remove --purge -y nodejs npm
             dpkg -i "$pkg_file"
         else
-            log "nodejs 已是新版本, 跳过"
+            log "nodejs is up to date, skipping"
         fi
     fi
 }
@@ -258,7 +258,7 @@ rm -rf ${DEFAULT_APT_CACHE}/*.deb
 log "Copying package files to apt cache"
 cp "$THIRDREALITY_ARCHIVES"/*.deb "$DEFAULT_APT_CACHE/" || log "WARNING: Failed to copy some package files"
 
-# 调用顺序替换为：
+# Replace call order to:
 install_mosquitto_packages
 install_libsystemd_dev
 install_nodejs
