@@ -39,8 +39,6 @@ export FRONTEND_VERSION="20251001.4"
 #python-matter-server==8.1.0
 export MATTER_SERVER_VERSION="8.1.1"
 
-CURRENT_PLATFORM=aarch64
-
 version=$(grep '^Version:' ${current_dir}/prebuild/DEBIAN/control | awk '{print $2}')
 print_info "Version: $version"
 
@@ -108,6 +106,8 @@ download_file() {
 }
 
 install_ota_provider() {
+    # Detect current platform dynamically
+    CURRENT_PLATFORM=$(uname -m)
     local binary_file=""
     case "${CURRENT_PLATFORM}" in
         x86_64) binary_file="chip-ota-provider-app-x86-64" ;;
