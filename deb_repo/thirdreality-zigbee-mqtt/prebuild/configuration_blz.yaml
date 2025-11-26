@@ -10,6 +10,7 @@ serial:
   baudrate: 2000000
 advanced:
   log_level: warning
+  last_seen: ISO_8601
   channel: 15
   network_key: GENERATE
   pan_id: GENERATE

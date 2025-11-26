@@ -51,20 +51,102 @@ install_libsystemd_dev() {
     fi
 }
 
+# Function to check and kill node processes
+check_and_kill_node_processes() {
+    log "Checking for running node processes..."
+    local node_pids=$(pgrep -f node 2>/dev/null || true)
+    if [ -n "$node_pids" ]; then
+        log "WARNING: Found running node processes: $node_pids"
+        log "Attempting to stop node processes..."
+        pkill -f node 2>/dev/null || true
+        sleep 2
+        # Check again
+        local remaining_pids=$(pgrep -f node 2>/dev/null || true)
+        if [ -n "$remaining_pids" ]; then
+            log "WARNING: Some node processes still running: $remaining_pids, forcing kill..."
+            pkill -9 -f node 2>/dev/null || true
+            sleep 1
+        fi
+        log "Node processes cleanup completed"
+    else
+        log "No running node processes found"
+    fi
+}
+
 install_nodejs() {
     local pkg_file=$(ls $DEFAULT_APT_CACHE/nodejs_*.deb 2>/dev/null | head -n 1)
     if [ -n "$pkg_file" ]; then
         local new_ver=$(dpkg-deb -f "$pkg_file" Version)
         local cur_ver=$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null)
+        log "=== Starting nodejs installation/upgrade ==="
         log "nodejs target version: $new_ver, installed version: $cur_ver"
-        if [ -z "$cur_ver" ]; then
-            dpkg -i "$pkg_file"
-        elif dpkg --compare-versions "$cur_ver" lt "$new_ver"; then
-            apt-get remove --purge -y nodejs npm
-            dpkg -i "$pkg_file"
+        
+        # Check service status before upgrade
+        if systemctl is-active --quiet zigbee2mqtt.service 2>/dev/null; then
+            log "WARNING: zigbee2mqtt.service is currently active"
         else
-            log "nodejs is up to date, skipping"
+            log "INFO: zigbee2mqtt.service is not active"
         fi
+        
+        if [ -z "$cur_ver" ]; then
+            log "Installing nodejs (first time installation)"
+            dpkg -i "$pkg_file" 2>&1 | tee -a "$LOG_FILE" || {
+                log "ERROR: Failed to install nodejs package"
+                return 1
+            }
+            log "nodejs installed successfully"
+        elif dpkg --compare-versions "$cur_ver" lt "$new_ver"; then
+            log "Upgrading nodejs from $cur_ver to $new_ver"
+            
+            # Check and kill node processes before removal
+            check_and_kill_node_processes
+            
+            # Verify services are stopped
+            log "Verifying services are stopped before nodejs removal..."
+            systemctl stop zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to stop zigbee2mqtt.service"
+            sleep 1
+            
+            # Check again for node processes
+            check_and_kill_node_processes
+            
+            # Remove nodejs and npm
+            log "Removing old nodejs package..."
+            apt-get remove --purge -y nodejs 2>&1 | tee -a "$LOG_FILE" || {
+                log "ERROR: Failed to remove nodejs, checking for blocking processes..."
+                # Check what's using nodejs files
+                if command -v lsof >/dev/null 2>&1; then
+                    log "Checking files in use by nodejs:"
+                    lsof +D /usr/bin/node /usr/lib/nodejs 2>/dev/null | head -20 | tee -a "$LOG_FILE" || true
+                fi
+                log "Attempting force removal..."
+                apt-get remove --purge -y nodejs 2>&1 | tee -a "$LOG_FILE" || true
+            }
+            
+            log "Removing old npm package..."
+            apt-get remove --purge -y npm 2>&1 | tee -a "$LOG_FILE" || {
+                log "WARNING: Failed to remove npm (may not be installed)"
+            }
+            
+            # Wait a moment for cleanup
+            sleep 1
+            
+            # Install new version
+            log "Installing new nodejs version..."
+            dpkg -i "$pkg_file" 2>&1 | tee -a "$LOG_FILE" || {
+                log "ERROR: Failed to install new nodejs package"
+                apt-get install -f -y 2>&1 | tee -a "$LOG_FILE" || true
+                return 1
+            }
+            
+            # Verify installation
+            local installed_ver=$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null || echo "unknown")
+            log "nodejs upgrade completed. Installed version: $installed_ver"
+        else
+            log "nodejs is up to date (version $cur_ver), skipping"
+        fi
+        log "=== nodejs installation/upgrade completed ==="
+    else
+        log "No nodejs package file found in cache, skipping installation"
     fi
 }
 
@@ -155,9 +237,36 @@ configure_zigbee2mqtt() {
 }
 
 stop_services() {
-    log "Stop services for manual control"
-    systemctl stop zigbee2mqtt.service > /dev/null 2>&1 || log "WARNING: Failed to stop zigbee2mqtt.service"
-    systemctl stop mosquitto.service > /dev/null 2>&1 || log "WARNING: Failed to stop mosquitto.service"
+    log "=== Stopping services for package installation ==="
+    
+    # Check initial status
+    if systemctl is-active --quiet zigbee2mqtt.service 2>/dev/null; then
+        log "zigbee2mqtt.service is currently active, stopping..."
+        systemctl stop zigbee2mqtt.service 2>&1 | tee -a "$LOG_FILE" || log "WARNING: Failed to stop zigbee2mqtt.service"
+        sleep 2
+        if systemctl is-active --quiet zigbee2mqtt.service 2>/dev/null; then
+            log "WARNING: zigbee2mqtt.service is still active after stop command"
+        else
+            log "zigbee2mqtt.service stopped successfully"
+        fi
+    else
+        log "zigbee2mqtt.service is not active"
+    fi
+    
+    if systemctl is-active --quiet mosquitto.service 2>/dev/null; then
+        log "mosquitto.service is currently active, stopping..."
+        systemctl stop mosquitto.service 2>&1 | tee -a "$LOG_FILE" || log "WARNING: Failed to stop mosquitto.service"
+        sleep 1
+        if systemctl is-active --quiet mosquitto.service 2>/dev/null; then
+            log "WARNING: mosquitto.service is still active after stop command"
+        else
+            log "mosquitto.service stopped successfully"
+        fi
+    else
+        log "mosquitto.service is not active"
+    fi
+    
+    log "=== Service stop completed ==="
 }
 
 # Function to check Home Assistant integration mode
@@ -258,15 +367,17 @@ rm -rf ${DEFAULT_APT_CACHE}/*.deb
 log "Copying package files to apt cache"
 cp "$THIRDREALITY_ARCHIVES"/*.deb "$DEFAULT_APT_CACHE/" || log "WARNING: Failed to copy some package files"
 
-# Replace call order to:
+# Stop services BEFORE installing nodejs to avoid file lock issues
+log "Stopping services before package installation to prevent file lock issues"
+stop_services
+
+# Install packages in order
 install_mosquitto_packages
 install_libsystemd_dev
 install_nodejs
 
 # Clean up apt cache after installation
 rm -rf ${DEFAULT_APT_CACHE}/*.deb
-
-stop_services
 
 configure_mosquitto
 configure_zigbee2mqtt
