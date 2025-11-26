@@ -380,7 +380,7 @@ else
 fi
 
 if [ -e "/usr/local/bin/supervisor" ]; then
-    /usr/local/bin/supervisor led off
+    /usr/local/bin/supervisor led clear
 fi
 
 # Sync filesystem to ensure all changes are written to disk
