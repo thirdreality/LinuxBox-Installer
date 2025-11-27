@@ -41,10 +41,10 @@ case "$1" in
         if [ -z "$2" ]; then
             # Fresh installation
             fix_manual_install
-            if [ -d "/opt/zigbee2mqtt/data" ]; then
-                rm -rf /opt/zigbee2mqtt/data/*
-            fi
-            # 首次安装才清空数据
+            #if [ -d "/opt/zigbee2mqtt/data" ]; then
+            #    rm -rf /opt/zigbee2mqtt/data/*
+            #fi
+            # 以前首次安装才清空数据， 从养老项目开始，不再删除这些文件
         else
             # Upgrade operation
             fix_manual_install

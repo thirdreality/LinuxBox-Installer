@@ -3,9 +3,14 @@ set -e
 
 case "$1" in
     purge)
-        rm -rf /opt/zigbee2mqtt/data/*
-        rm -rf /opt/zigbee2mqtt/
-        rm -rf /opt/zigbee-herdsman/
+        # Remove log directory under data, but keep /opt/zigbee2mqtt/data/ itself
+        rm -rf /opt/zigbee2mqtt/data/log || true
+        
+        # Remove zigbee2mqtt directory contents except data folder
+        find /opt/zigbee2mqtt/ -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} \; 2>/dev/null || true
+        
+        # Remove zigbee-herdsman directory
+        rm -rf /opt/zigbee-herdsman/ || true
     ;;
     remove|abort-install|abort-upgrade|disappear)
     ;;
