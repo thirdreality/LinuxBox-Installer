@@ -17,6 +17,91 @@ log_error() {
     echo "[ERROR] $*" >&2
 }
 
+# 检查并执行备份
+check_and_backup() {
+    local backup_dir="/mnt/R3Backup"
+    local enable_file1="${backup_dir}/.enable-backup"
+    local enable_file2="${backup_dir}/.enable_backup"
+    
+    # 检查目录是否存在
+    if [[ ! -d "$backup_dir" ]]; then
+        log_info "No need to backup software settings."
+        return 0
+    fi
+    
+    # 检查启用文件是否存在（二选一）
+    if [[ ! -f "$enable_file1" ]] && [[ ! -f "$enable_file2" ]]; then
+        log_info "No need to backup software settings."
+        return 0
+    fi
+    
+    # 检查 supervisor 是否存在
+    if [[ ! -f "/usr/local/bin/supervisor" ]]; then
+        log_warn "Supervisor not found at /usr/local/bin/supervisor, skipping backup"
+        return 0
+    fi
+
+    log_info "Backup enabled, starting backup process..."
+    
+    # 执行备份命令
+    log_info "Executing: /usr/local/bin/supervisor setting backup"
+    /usr/local/bin/supervisor setting backup
+    
+    # 等待1秒后开始查询状态
+    sleep 1
+    
+    # 轮询检查备份状态
+    local max_attempts=300  # 最多等待300秒（5分钟）
+    local attempt=0
+    
+    while [[ $attempt -lt $max_attempts ]]; do
+        local response
+        response=$(curl -s "http://127.0.0.1:8086/api/task/info?task=setting" 2>/dev/null)
+        
+        if [[ -z "$response" ]]; then
+            log_warn "Failed to get backup status, retrying..."
+            sleep 1
+            ((attempt++))
+            continue
+        fi
+        
+        # 解析 JSON 响应（使用 sed，兼容无 jq 环境）
+        local status
+        local progress
+        local message
+        
+        status=$(echo "$response" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        progress=$(echo "$response" | sed -n 's/.*"progress"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')
+        message=$(echo "$response" | sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        
+        log_info "Backup status: $status, progress: ${progress}%"
+        
+        if [[ "$status" == "failed" ]]; then
+            log_error "Backup failed: $message"
+            break
+        elif [[ "$status" == "success" ]] || [[ "$progress" -eq 100 ]]; then
+            log_info "Backup completed successfully: $message"
+            break
+        fi
+        
+        # 继续等待
+        sleep 1
+        ((attempt++))
+    done
+    
+    if [[ $attempt -ge $max_attempts ]]; then
+        log_warn "Backup timed out after ${max_attempts} seconds"
+    fi
+    
+    # 清理启用文件
+    log_info "Cleaning up backup enable files..."
+    rm -f "$enable_file1" 2>/dev/null || true
+    rm -f "$enable_file2" 2>/dev/null || true
+    
+    log_info "Backup process finished"
+    return 0
+}
+
 # 检查 Python 3.13 是否存在
 check_python() {
     [ -f "/usr/bin/python3.13" ] || \
@@ -159,6 +244,7 @@ main() {
             ;;
         upgrade)
             if [ -n "$2" ]; then
+                check_and_backup
                 handle_upgrade "$2"
             else
                 log_warn "No old version specified, treating as fresh install"
