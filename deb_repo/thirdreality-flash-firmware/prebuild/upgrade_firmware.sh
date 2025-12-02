@@ -234,7 +234,7 @@ flash_zigbee() {
         # Get BL702 info after flashing zigbee firmware
         echo "Getting BL702 info after zigbee firmware flash..."
         if [ -f "$SRC/check_zigbee_firmware.py" ]; then
-            python3 "$SRC/check_zigbee_firmware.py"
+            PATH="$bl706_env_path" python3 "$SRC/check_zigbee_firmware.py" || true
         else
             echo "Warning: check_zigbee_firmware.py not found at $SRC/check_zigbee_firmware.py"
         fi
@@ -302,7 +302,7 @@ flash_thread() {
         # Get RCP version after flashing thread firmware
         echo "Getting RCP version after thread firmware flash..."
         if [ -f "$SRC/check_thread_firmware.py" ]; then
-            python3 "$SRC/check_thread_firmware.py"
+            PATH="$bl706_env_path" python3 "$SRC/check_thread_firmware.py" || true
         else
             echo "Warning: check_thread_firmware.py not found at $SRC/check_thread_firmware.py"
         fi
