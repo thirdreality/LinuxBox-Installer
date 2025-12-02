@@ -226,9 +226,10 @@ flash_zigbee() {
             fi
         done
 
-        # Execute flash command
+        # Execute flash command with system PATH to ensure python3 resolves to system interpreter
         chmod +x $DST/bl706_func.sh
-        $DST/bl706_func.sh flash zigbee
+        local bl706_env_path="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+        PATH="$bl706_env_path" $DST/bl706_func.sh flash zigbee || true
 
         # Get BL702 info after flashing zigbee firmware
         echo "Getting BL702 info after zigbee firmware flash..."
@@ -293,9 +294,10 @@ flash_thread() {
             was_running=true
         fi
 
-        # Execute flash command
+        # Execute flash command with system PATH to ensure python3 resolves to system interpreter
         chmod +x $DST/bl706_func.sh
-        $DST/bl706_func.sh flash thread
+        local bl706_env_path="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+        PATH="$bl706_env_path" $DST/bl706_func.sh flash thread || true
 
         # Get RCP version after flashing thread firmware
         echo "Getting RCP version after thread firmware flash..."
