@@ -19,6 +19,9 @@ log_error() {
 
 # 检查并执行备份
 check_and_backup() {
+    # 临时禁用 set -e，避免备份过程中的错误导致安装失败
+    set +e
+    
     local backup_dir="/mnt/R3Backup"
     local enable_file1="${backup_dir}/.enable-backup"
     local enable_file2="${backup_dir}/.enable_backup"
@@ -26,26 +29,31 @@ check_and_backup() {
     # 检查目录是否存在
     if [[ ! -d "$backup_dir" ]]; then
         log_info "No need to backup software settings."
-        return 0
+        set -e
+        return
     fi
     
     # 检查启用文件是否存在（二选一）
     if [[ ! -f "$enable_file1" ]] && [[ ! -f "$enable_file2" ]]; then
         log_info "No need to backup software settings."
-        return 0
+        set -e
+        return
     fi
     
     # 检查 supervisor 是否存在
     if [[ ! -f "/usr/local/bin/supervisor" ]]; then
         log_warn "Supervisor not found at /usr/local/bin/supervisor, skipping backup"
-        return 0
+        set -e
+        return
     fi
 
     log_info "Backup enabled, starting backup process..."
     
-    # 执行备份命令
+    # 执行备份命令（忽略错误，继续执行）
     log_info "Executing: /usr/local/bin/supervisor setting backup"
-    /usr/local/bin/supervisor setting backup
+    /usr/local/bin/supervisor setting backup || {
+        log_warn "Supervisor backup command returned error, but continuing..."
+    }
     
     # 等待1秒后开始查询状态
     sleep 1
@@ -56,12 +64,12 @@ check_and_backup() {
     
     while [[ $attempt -lt $max_attempts ]]; do
         local response
-        response=$(curl -s "http://127.0.0.1:8086/api/task/info?task=setting" 2>/dev/null)
+        response=$(curl -s "http://127.0.0.1:8086/api/task/info?task=setting" 2>/dev/null || echo "")
         
         if [[ -z "$response" ]]; then
             log_warn "Failed to get backup status, retrying..."
             sleep 1
-            ((attempt++))
+            attempt=$((attempt + 1))
             continue
         fi
         
@@ -70,9 +78,14 @@ check_and_backup() {
         local progress
         local message
         
-        status=$(echo "$response" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-        progress=$(echo "$response" | sed -n 's/.*"progress"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')
-        message=$(echo "$response" | sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+        status=$(echo "$response" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || echo "")
+        progress=$(echo "$response" | sed -n 's/.*"progress"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' || echo "0")
+        message=$(echo "$response" | sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || echo "")
+        
+        # 确保 progress 是数字
+        if ! [[ "$progress" =~ ^[0-9]+$ ]]; then
+            progress=0
+        fi
         
         log_info "Backup status: $status, progress: ${progress}%"
         
@@ -86,7 +99,7 @@ check_and_backup() {
         
         # 继续等待
         sleep 1
-        ((attempt++))
+        attempt=$((attempt + 1))
     done
     
     if [[ $attempt -ge $max_attempts ]]; then
@@ -99,7 +112,10 @@ check_and_backup() {
     rm -f "$enable_file2" 2>/dev/null || true
     
     log_info "Backup process finished"
-    return 0
+    
+    # 恢复 set -e
+    set -e
+    return
 }
 
 # 检查 Python 3.13 是否存在
