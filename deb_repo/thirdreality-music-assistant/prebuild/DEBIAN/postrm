@@ -15,22 +15,12 @@ log_warn() {
 # 清理应用文件
 cleanup_application_files() {
     log_info "Cleaning up application files..."
-    
-    # 清理配置文件
-    if [ -f "/var/lib/homeassistant/zha.conf" ]; then
-        rm -rf /var/lib/homeassistant/zha.conf || true
-    fi
-
-    if [ -f "/var/lib/homeassistant/zha.conf.bak" ]; then
-        rm -rf /var/lib/homeassistant/zha.conf.bak || true
-    fi
-    
+        
     # 清理临时文件
-    rm -rf /tmp/chip_kvs || true
+    rm -rf /tmp/music-assistant || true
     
     # 清理应用目录（但保留用户数据）
-    rm -rf /srv/homeassistant || true
-    rm -rf /srv/matter_server || true
+    rm -rf /srv/music-assistant || true
     
     # 只在目录为空时删除 /srv（避免影响其他服务）
     if [ -d "/srv" ]; then
@@ -46,18 +36,14 @@ cleanup_application_files() {
 
 # 清理升级备份（可选）
 cleanup_backups() {
-    if [ -d "/var/lib/homeassistant/backup-"* ]; then
-        log_info "Upgrade backups found in /var/lib/homeassistant/"
-        log_info "To remove old backups manually, run:"
-        log_info "  rm -rf /var/lib/homeassistant/backup-*"
-    fi
+
 }
 
 # 保留用户数据提示
 show_data_retention_info() {
-    if [ -d "/var/lib/homeassistant" ]; then
+    if [ -d "/var/lib/homeassistant/music-assistant" ]; then
         log_info "=============================================="
-        log_info "User data preserved in /var/lib/homeassistant/"
+        log_info "User data preserved in /var/lib/homeassistant/music-assistant"
         log_info "This includes:"
         log_info "  - Home Assistant configuration"
         log_info "  - Device databases"
@@ -65,8 +51,7 @@ show_data_retention_info() {
         log_info "  - Upgrade logs"
         log_info ""
         log_info "To completely remove all data, run:"
-        log_info "  rm -rf /var/lib/homeassistant/homeassistant"
-        log_info "  rm -rf /var/lib/homeassistant/matter_server"
+        log_info "  rm -rf /var/lib/homeassistant/music-assistant"
         log_info "=============================================="
     fi
 }
@@ -74,22 +59,19 @@ show_data_retention_info() {
 # 主逻辑
 main() {
     if [ "$1" = "remove" ]; then
-        log_info "Removing thirdreality-hacore package..."
+        log_info "Removing thirdreality-music-assistant package..."
         cleanup_application_files
         cleanup_backups
         show_data_retention_info
         
     elif [ "$1" = "purge" ]; then
-        log_info "Purging thirdreality-hacore package and all data..."
+        log_info "Purging thirdreality-music-assistant package and all data..."
         cleanup_application_files
         
         # 完全清理用户数据
         log_warn "Purging all user data..."
-        rm -rf /var/lib/homeassistant/homeassistant || true
-        rm -rf /var/lib/homeassistant/matter_server || true
-        rm -rf /data/homeassistant || true
-        rm -rf /data/matter_server || true
-        rm -rf /updates || true
+        rm -rf /var/lib/homeassistant/music-assistant || true
+        rm -rf /data/music-assistant || true
         
         log_info "All data has been removed"
     fi

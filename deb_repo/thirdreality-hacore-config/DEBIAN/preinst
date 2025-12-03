@@ -20,8 +20,11 @@ fi
 # Fresh install: clear old runtime/config to avoid incompatibilities
 if [ "$ACTION" = "install" ]; then
     if [ -d "$TARGET_DIR" ]; then
-        rm -rf "$TARGET_DIR" || true
-        mkdir -p "$TARGET_DIR"
+        rm -rf "$TARGET_DIR/homeassistant" || true
+        rm -rf "$TARGET_DIR/matter_server" || true
+        rm -rf "$TARGET_DIR/zha.conf" || true
+        mkdir -p "$TARGET_DIR/homeassistant"
+        mkdir -p "$TARGET_DIR/matter_server"
     fi
 fi
 

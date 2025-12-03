@@ -3,15 +3,23 @@ set -e
 
 # Keep it simple: on remove, clear the whole data directory once
 if [ "$1" = "remove" ]; then
-    rm -rf /var/lib/homeassistant
+    rm -rf /var/lib/homeassistant/homeassistant
+    rm -rf /var/lib/homeassistant/matter_server
+    rm -rf /var/lib/homeassistant/zha.conf"
     mkdir -p /var/lib/homeassistant
-    echo "Removed /var/lib/homeassistant."
+    echo "Removed /var/lib/homeassistant/homeassistant."
+    echo "Removed /var/lib/homeassistant/matter_server."
+    echo "Removed /var/lib/homeassistant/zha.conf."
 fi
 
 # On purge, delete completely and do NOT recreate
 if [ "$1" = "purge" ]; then
-    rm -rf /var/lib/homeassistant
-    echo "Purged /var/lib/homeassistant."
+    rm -rf /var/lib/homeassistant/homeassistant
+    rm -rf /var/lib/homeassistant/matter_server
+    rm -rf /var/lib/homeassistant/zha.conf"
+    echo "Purged /var/lib/homeassistant/homeassistant."
+    echo "Purged /var/lib/homeassistant/matter_server."
+    echo "Purged /var/lib/homeassistant/zha.conf."
 fi
 
 exit 0

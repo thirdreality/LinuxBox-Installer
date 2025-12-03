@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+# 停止服务
+if [ "$1" = "remove" ]; then
+    if [ -f "/lib/systemd/system/music-assistant.service" ]; then
+        systemctl stop music-assistant.service
+        systemctl disable music-assistant.service
+
+        rm -rf /lib/systemd/system/music-assistant.service
+    fi
+
+    systemctl daemon-reload
+fi
+
+exit 0

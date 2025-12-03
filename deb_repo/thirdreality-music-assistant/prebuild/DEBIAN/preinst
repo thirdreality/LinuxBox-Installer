@@ -1,0 +1,279 @@
+#!/bin/bash
+# preinst script for thirdreality-hacore
+# 改进版本 - 支持优雅升级
+
+set -e
+
+# 日志函数
+log_info() {
+    echo "[INFO] $*" >&2
+}
+
+log_warn() {
+    echo "[WARN] $*" >&2
+}
+
+log_error() {
+    echo "[ERROR] $*" >&2
+}
+
+# 检查并执行备份
+check_and_backup() {
+    # 临时禁用 set -e，避免备份过程中的错误导致安装失败
+    set +e
+    
+    local backup_dir="/mnt/R3Backup"
+    local enable_file1="${backup_dir}/.enable-backup"
+    local enable_file2="${backup_dir}/.enable_backup"
+    
+    # 检查目录是否存在
+    if [[ ! -d "$backup_dir" ]]; then
+        log_info "No need to backup software settings."
+        set -e
+        return
+    fi
+    
+    # 检查启用文件是否存在（二选一）
+    if [[ ! -f "$enable_file1" ]] && [[ ! -f "$enable_file2" ]]; then
+        log_info "No need to backup software settings."
+        set -e
+        return
+    fi
+    
+    # 检查 supervisor 是否存在
+    if [[ ! -f "/usr/local/bin/supervisor" ]]; then
+        log_warn "Supervisor not found at /usr/local/bin/supervisor, skipping backup"
+        set -e
+        return
+    fi
+
+    log_info "Backup enabled, starting backup process..."
+    
+    # 执行备份命令（忽略错误，继续执行）
+    log_info "Executing: /usr/local/bin/supervisor setting backup"
+    /usr/local/bin/supervisor setting backup || {
+        log_warn "Supervisor backup command returned error, but continuing..."
+    }
+    
+    # 等待1秒后开始查询状态
+    sleep 1
+    
+    # 轮询检查备份状态
+    local max_attempts=300  # 最多等待300秒（5分钟）
+    local attempt=0
+    
+    while [[ $attempt -lt $max_attempts ]]; do
+        local response
+        response=$(curl -s "http://127.0.0.1:8086/api/task/info?task=setting" 2>/dev/null || echo "")
+        
+        if [[ -z "$response" ]]; then
+            log_warn "Failed to get backup status, retrying..."
+            sleep 1
+            attempt=$((attempt + 1))
+            continue
+        fi
+        
+        # 解析 JSON 响应（使用 sed，兼容无 jq 环境）
+        local status
+        local progress
+        local message
+        
+        status=$(echo "$response" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || echo "")
+        progress=$(echo "$response" | sed -n 's/.*"progress"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' || echo "0")
+        message=$(echo "$response" | sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || echo "")
+        
+        # 确保 progress 是数字
+        if ! [[ "$progress" =~ ^[0-9]+$ ]]; then
+            progress=0
+        fi
+        
+        log_info "Backup status: $status, progress: ${progress}%"
+        
+        if [[ "$status" == "failed" ]]; then
+            log_error "Backup failed: $message"
+            break
+        elif [[ "$status" == "success" ]] || [[ "$progress" -eq 100 ]]; then
+            log_info "Backup completed successfully: $message"
+            break
+        fi
+        
+        # 继续等待
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    
+    if [[ $attempt -ge $max_attempts ]]; then
+        log_warn "Backup timed out after ${max_attempts} seconds"
+    fi
+    
+    # 清理启用文件
+    log_info "Cleaning up backup enable files..."
+    rm -f "$enable_file1" 2>/dev/null || true
+    rm -f "$enable_file2" 2>/dev/null || true
+    
+    log_info "Backup process finished"
+    
+    # 恢复 set -e
+    set -e
+    return
+}
+
+# 检查 Python 3.13 是否存在
+check_python() {
+    [ -f "/usr/bin/python3.13" ] || \
+    [ -f "/usr/local/bin/python3.13" ] || \
+    [ -f "/usr/local/python3/bin/python3.13" ] || {
+        log_error "Python 3.13 not found in any of:"
+        log_error "  /usr/bin/python3.13"
+        log_error "  /usr/local/bin/python3.13"
+        log_error "  /usr/local/python3/bin/python3.13"
+        exit 1
+    }
+}
+
+# 停止服务
+stop_services() {
+    log_info "Stopping services if running..."
+    
+    if [[ "$(/usr/bin/systemctl is-active home-assistant.service)" == "active" ]]; then
+        log_info "Stopping home-assistant.service"
+        /usr/bin/systemctl stop home-assistant.service || true
+    fi
+
+    if [[ "$(/usr/bin/systemctl is-active matter-server.service)" == "active" ]]; then
+        log_info "Stopping matter-server.service"
+        /usr/bin/systemctl stop matter-server.service || true
+    fi
+}
+
+# 首次安装处理
+handle_install() {
+    log_info "Performing fresh installation..."
+    
+    # 清理旧的安装（如果存在）
+    if [[ -e "/srv/homeassistant" ]]; then
+        log_warn "Removing existing /srv/homeassistant directory"
+        rm -rf /srv/homeassistant
+    fi
+    
+    if [[ -e "/srv/matter_server" ]]; then
+        log_warn "Removing existing /srv/matter_server directory"
+        rm -rf /srv/matter_server
+    fi
+}
+
+# 升级处理
+handle_upgrade() {
+    local old_version="$1"
+    log_info "Upgrading from version $old_version..."
+    
+    # 创建升级日志目录
+    UPGRADE_LOG_DIR="/var/lib/homeassistant/upgrade-logs"
+    mkdir -p "$UPGRADE_LOG_DIR"
+    
+    UPGRADE_LOG="$UPGRADE_LOG_DIR/upgrade-$(date +%Y%m%d-%H%M%S).log"
+    
+    {
+        echo "========================================"
+        echo "Upgrade started at: $(date)"
+        echo "From version: $old_version"
+        echo "========================================"
+    } >> "$UPGRADE_LOG"
+    
+    # 创建升级备份
+    BACKUP_DIR="/var/lib/homeassistant/backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BACKUP_DIR"
+    
+    log_info "Creating backup in $BACKUP_DIR..."
+    
+    # 备份关键配置文件
+    if [ -f "/var/lib/homeassistant/homeassistant/configuration.yaml" ]; then
+        cp -a /var/lib/homeassistant/homeassistant/configuration.yaml "$BACKUP_DIR/" || true
+        echo "Backed up: configuration.yaml" >> "$UPGRADE_LOG"
+    fi
+    
+    if [ -f "/var/lib/homeassistant/zha.conf" ]; then
+        cp -a /var/lib/homeassistant/zha.conf "$BACKUP_DIR/" || true
+        echo "Backed up: zha.conf" >> "$UPGRADE_LOG"
+    fi
+    
+    if [ -d "/var/lib/homeassistant/homeassistant/.storage" ]; then
+        cp -a /var/lib/homeassistant/homeassistant/.storage "$BACKUP_DIR/" || true
+        echo "Backed up: .storage directory" >> "$UPGRADE_LOG"
+    fi
+    
+    if [ -f "/var/lib/homeassistant/matter_server/chip.json" ]; then
+        cp -a /var/lib/homeassistant/matter_server/chip.json "$BACKUP_DIR/" || true
+        echo "Backed up: chip.json" >> "$UPGRADE_LOG"
+    fi
+    
+    # 记录当前已安装的包版本
+    dpkg -l | grep thirdreality > "$BACKUP_DIR/installed-packages.txt" || true
+    
+    # 清理虚拟环境中的 Python 缓存（但保留虚拟环境本身）
+    if [[ -e "/srv/homeassistant" ]]; then
+        log_info "Cleaning Python cache files..."
+        find /srv/homeassistant -name "*.pyc" -delete 2>/dev/null || true
+        find /srv/homeassistant -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+        echo "Cleaned Python cache files" >> "$UPGRADE_LOG"
+    fi
+    
+    if [[ -e "/srv/matter_server" ]]; then
+        find /srv/matter_server -name "*.pyc" -delete 2>/dev/null || true
+        find /srv/matter_server -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    fi
+    
+    # 保存备份路径供 postinst 使用
+    echo "$BACKUP_DIR" > /tmp/hacore-upgrade-backup-path.txt
+    echo "$UPGRADE_LOG" > /tmp/hacore-upgrade-log-path.txt
+    
+    log_info "Backup completed: $BACKUP_DIR"
+    
+    # 版本兼容性检查
+    if dpkg --compare-versions "$old_version" lt "2024.1.0"; then
+        log_warn "Upgrading from very old version ($old_version)"
+        log_warn "Please review release notes for potential breaking changes"
+        echo "WARNING: Upgrading from old version $old_version" >> "$UPGRADE_LOG"
+    fi
+    
+    # 磁盘空间检查
+    AVAILABLE_SPACE=$(df /srv | awk 'NR==2 {print $4}')
+    REQUIRED_SPACE=1048576  # 1GB in KB
+    
+    if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
+        log_error "Insufficient disk space. Required: 1GB, Available: $((AVAILABLE_SPACE/1024))MB"
+        echo "ERROR: Insufficient disk space" >> "$UPGRADE_LOG"
+        exit 1
+    fi
+    
+    echo "Disk space check passed: ${AVAILABLE_SPACE}KB available" >> "$UPGRADE_LOG"
+}
+
+# 主逻辑
+main() {
+    check_python
+    stop_services
+    
+    case "$1" in
+        install)
+            handle_install
+            ;;
+        upgrade)
+            if [ -n "$2" ]; then
+                check_and_backup
+                handle_upgrade "$2"
+            else
+                log_warn "No old version specified, treating as fresh install"
+                handle_install
+            fi
+            ;;
+        *)
+            log_info "preinst called with unknown argument: $1"
+            ;;
+    esac
+}
+
+main "$@"
+
+exit 0
+

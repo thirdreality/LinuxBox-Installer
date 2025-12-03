@@ -1,0 +1,19 @@
+[Unit]
+Description=Music Assistant Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/opt/music-assistant
+Environment="PATH=/opt/music-assistant/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="VIRTUAL_ENV=/opt/music-assistant/venv"
+# 使用 jemalloc 优化内存管理（可选但推荐）
+Environment="LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2"
+ExecStart=/opt/music-assistant/venv/bin/mass --data-dir /opt/music-assistant/data --cache-dir /opt/music-assistant/data/.cache
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

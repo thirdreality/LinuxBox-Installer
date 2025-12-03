@@ -58,7 +58,8 @@ if [[ "$CLEAN" == true ]]; then
     rm -rf /usr/local/bin/chip-ota-provider-app
     rm -rf /usr/local/bin/zigpy_help.sh
 
-    rm -rf /var/lib/homeassistant/*.* || true
+    rm -rf /var/lib/homeassistant/homeassistant/*.* || true
+    rm -rf /var/lib/homeassistant/matter_server/*.* || true
 
     print_info "Removing ${home_assistant_path} ..."
     rm -rf ${home_assistant_path}
@@ -191,6 +192,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         pymicro-vad==1.0.1 \
         pyspeex-noise==1.0.2
 
+    ${UV_INSTALLED_COMMAND} music-assistant-client==1.2.4
 
     #以下是一个强制换行符号
     ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.1.2 ha-silabs-firmware-client==0.3.0 psutil-home-assistant==0.0.1
@@ -390,7 +392,8 @@ fi
 
 mkdir -p ${output_dir}/srv
 chmod 755 ${output_dir}/srv
-cp /srv/* ${output_dir}/srv/ -R
+cp /srv/homeassistant ${output_dir}/srv/ -R
+cp /srv/matter_server ${output_dir}/srv/ -R
 
 mkdir -p ${output_dir}/lib/systemd/system/
 cp /lib/systemd/system/home-assistant.service ${output_dir}/lib/systemd/system/
