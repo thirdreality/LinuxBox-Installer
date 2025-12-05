@@ -14,7 +14,7 @@ StandardError=inherit
 #WatchdogSec=10s
 Restart=always
 RestartSec=10s
-StartLimitIntervalSec=300
+StartLimitInterval=300
 StartLimitBurst=10
 
 # After main process is considered started, delay and then trigger permit-if-passlist script in background
