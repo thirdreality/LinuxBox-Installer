@@ -1,5 +1,5 @@
 Package: thirdreality-zigbee-mqtt
-Version: 2.6.2-rc
+Version: 2.6.3-blz
 Section: utils
 Priority: optional
 Architecture: arm64

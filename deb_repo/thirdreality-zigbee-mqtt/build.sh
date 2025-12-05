@@ -147,7 +147,7 @@ fi
 if [ ! -d "/lib/node_modules/pnpm" ]; then
     print_info "Installing pnpm..."
     #npm install -g pnpm
-    npm install -g pnpm@10.12.1
+    npm install -g pnpm@10.18.3
 fi
 
 print_info "node version should output V22.x, V24.x, current: \e[1;31m $(node --version)\e[0m "
@@ -204,7 +204,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
 
     print_info "Build zigbee-herdsman ..."
     mkdir -p /opt/zigbee-herdsman
-    git clone -b feat/blz https://github.com/fangzheli/zigbee-herdsman.git /opt/zigbee-herdsman
+    git clone -b 3r_blz_6.0.1 https://github.com/thirdreality/zigbee-herdsman.git /opt/zigbee-herdsman
 
     cd /opt/zigbee-herdsman
     dirty_id=$(/usr/bin/git describe --dirty --always)
@@ -214,7 +214,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     print_info "zigbee-herdsman commit-id '$commit_id'"
     echo "zigbee-herdsman-commit: $commit_id" >> ${output_dir}/DEBIAN/control
 
-    rm -rf /opt/zigbee-herdsman/.git /opt/zigbee-herdsman/.github
+    # Keep .git and .github in /opt, will remove after copying to output_dir
     #pnpm i --frozen-lockfile
     pnpm install --no-frozen-lockfile --registry=https://mirrors.tencent.com/npm/ && pnpm run build
     #pnpm install && pnpm run build
@@ -222,8 +222,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     print_info "Build zigbee2mqtt ..."
     mkdir -p /opt/zigbee2mqtt
     #git clone --depth 1 https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
-    git clone -b feat/blz-local-dev https://github.com/fangzheli/zigbee2mqtt.git /opt/zigbee2mqtt
-    #git clone -b feat/blz-local-dev https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
+    git clone -b 3r_blz_2.6.3 https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
 
     cd /opt/zigbee2mqtt
     dirty_id=$(/usr/bin/git describe --dirty --always)
@@ -233,14 +232,19 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     print_info "zigbee2mqtt commit-id '$commit_id'"
     echo "zigbee2mqtt-commit: $commit_id" >> ${output_dir}/DEBIAN/control
 
-    rm -rf /opt/zigbee2mqtt/.git /opt/zigbee2mqtt/.github
+    # Keep .git and .github in /opt, will remove after copying to output_dir
     #pnpm install --frozen-lockfile && pnpm run build
     pnpm install --no-frozen-lockfile --registry=https://mirrors.tencent.com/npm/ && pnpm run build
     #npm ci
     #pnpm i --frozen-lockfile
 
+    
     cp ${current_dir}/prebuild/configuration_zigate.yaml /opt/zigbee2mqtt/data/configuration_zigate.yaml
     cp ${current_dir}/prebuild/configuration_blz.yaml /opt/zigbee2mqtt/data/configuration_blz.yaml
+
+    mkdir -p /opt/zigbee2mqtt/data/external_converters
+    cp ${current_dir}/prebuild/motion.js /opt/zigbee2mqtt/data/external_converters/
+
     #npm run build
 else
     cd /opt/zigbee-herdsman
@@ -293,6 +297,11 @@ cp /opt/zigbee2mqtt ${output_dir}/opt/ -R
 
 mkdir -p ${output_dir}/opt/zigbee-herdsman
 cp /opt/zigbee-herdsman ${output_dir}/opt/ -R
+
+# Remove .git and .github from output_dir after copying
+print_info "Removing .git and .github from output_dir ..."
+rm -rf ${output_dir}/opt/zigbee2mqtt/.git ${output_dir}/opt/zigbee2mqtt/.github || true
+rm -rf ${output_dir}/opt/zigbee-herdsman/.git ${output_dir}/opt/zigbee-herdsman/.github || true
 
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/database.db || true
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/database.db.backup || true
