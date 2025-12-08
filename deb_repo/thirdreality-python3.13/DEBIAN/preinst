@@ -15,6 +15,18 @@ case "$1" in
                 systemctl stop matter-server.service || true
             fi
         fi
+        
+        # 如果是升级，移除 /usr/local/bin 下的符号链接
+        if [ "$1" = "upgrade" ]; then
+            echo "Removing symlinks from /usr/local/bin"
+            for link in python python3 python3-config pip pip3; do
+                link_path="/usr/local/bin/$link"
+                if [ -L "$link_path" ]; then
+                    echo "Removing symlink: $link_path"
+                    rm -f "$link_path" || true
+                fi
+            done
+        fi
         ;;
 esac
 

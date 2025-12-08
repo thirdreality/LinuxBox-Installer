@@ -181,6 +181,6 @@ strip ${output_dir}/${python3_dir}/bin/python3.13
 echo "Start to build python3_${version}.deb ..."
 dpkg-deb --build ${output_dir} ${current_dir}/python3_${version}.deb
 
-rm -rf ${output_dir}/usr/
+#rm -rf ${output_dir}/usr/
 
 echo "Build python3_${version}.deb success ..."
