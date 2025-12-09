@@ -1,0 +1,78 @@
+{
+  "server_id": "ffffffffffffffffffffffffffffffff",
+  "providers": {
+    "fanarttv": {
+      "values": {},
+      "type": "metadata",
+      "domain": "fanarttv",
+      "instance_id": "fanarttv",
+      "enabled": true,
+      "name": "fanart.tv",
+      "last_error": null
+    },
+    "musicbrainz": {
+      "values": {},
+      "type": "metadata",
+      "domain": "musicbrainz",
+      "instance_id": "musicbrainz",
+      "enabled": true,
+      "name": "MusicBrainz",
+      "last_error": null
+    },
+    "player_group": {
+      "values": {},
+      "type": "player",
+      "domain": "player_group",
+      "instance_id": "player_group",
+      "enabled": true,
+      "name": "Playergroup",
+      "last_error": null
+    },
+    "builtin_player": {
+      "values": {},
+      "type": "player",
+      "domain": "builtin_player",
+      "instance_id": "builtin_player",
+      "enabled": true,
+      "name": "Music Assistant",
+      "last_error": null
+    },
+    "theaudiodb": {
+      "values": {},
+      "type": "metadata",
+      "domain": "theaudiodb",
+      "instance_id": "theaudiodb",
+      "enabled": true,
+      "name": "The Audio DB",
+      "last_error": null
+    },
+    "lrclib": {
+      "values": {},
+      "type": "metadata",
+      "domain": "lrclib",
+      "instance_id": "lrclib",
+      "enabled": true,
+      "name": "LRCLIB",
+      "last_error": null
+    },
+    "builtin": {
+      "values": {},
+      "type": "music",
+      "domain": "builtin",
+      "instance_id": "builtin",
+      "enabled": true,
+      "name": "Music Assistant",
+      "last_error": null
+    }
+  },
+  "core": {
+    "metadata": {
+      "values": {
+        "language": "en_US"
+      },
+      "domain": "metadata",
+      "last_error": null
+    }
+  },
+  "players": {}
+}

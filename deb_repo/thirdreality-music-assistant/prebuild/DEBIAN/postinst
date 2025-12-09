@@ -70,20 +70,12 @@ create_directories() {
     info "Creating necessary directories..."
     
     mkdir -p /var/lib/homeassistant
-    mkdir -p /var/lib/homeassistant/homeassistant
-    mkdir -p /var/lib/homeassistant/matter_server
-    mkdir -p /var/lib/homeassistant/upgrade-logs
+    mkdir -p /var/lib/homeassistant/music_assistant
     
     # 创建运行时目录（使用更安全的权限）
     mkdir -p /data /updates
     chmod 755 /data /updates
-    
-    # 创建临时文件（使用更安全的权限）
-    if [ ! -f "/tmp/chip_kvs" ]; then
-        touch /tmp/chip_kvs && chmod 660 /tmp/chip_kvs || {
-            warn "Failed to setup /tmp/chip_kvs"
-        }
-    fi
+    chmod 755 /var/lib/homeassistant/music_assistant
     
     log_upgrade "Directories created successfully"
 }
@@ -93,66 +85,49 @@ setup_script_permissions() {
     info "Setting up script permissions..."
     
     local scripts=(
-        "home_assistant_boot_check.sh"
-        "home_assistant_blz_reset.sh"
-        "home_assistant_zha_enable.py"
-        "home_assistant_zigbee_fix.sh"
-        "home_assistant_init.sh"
-        "home_assistant_matter_fix.sh"
-        "home_assistant_boot_check.py"
+        "generate_mass_config.py"
     )
     
     for script in "${scripts[@]}"; do
-        if [ -e "/srv/homeassistant/bin/$script" ]; then
-            chmod +x "/srv/homeassistant/bin/$script" > /dev/null 2>&1 || true
+        if [ -e "/srv/music-assistant/bin/$script" ]; then
+            chmod +x "/srv/music-assistant/bin/$script" > /dev/null 2>&1 || true
         fi
     done
     
     log_upgrade "Script permissions configured"
 }
 
-# 更新 Zigbee 默认配置
-update_zigbee_config() {
+# 更新 Music Assistant 默认配置
+update_music_assistant_config() {
     local is_fresh_install="$1"
     
     # 只在首次安装时执行初始化脚本
     # 升级时不执行，避免修改用户已有配置
     if [ "$is_fresh_install" = "true" ]; then
-        info "Update zigbee default config (fresh install)..."
+        info "Update music assistant default config (fresh install)..."
         
-        if [ -e "/srv/homeassistant/bin/home_assistant_init.sh" ]; then
-            chmod +x /srv/homeassistant/bin/home_assistant_init.sh > /dev/null 2>&1
 
-            if [ -e "/var/lib/homeassistant/homeassistant/configuration.yaml" ]; then
-                /srv/homeassistant/bin/home_assistant_init.sh > /dev/null 2>&1 || {
-                    warn "home_assistant_init.sh failed, but continuing..." 
-                    log_upgrade "WARNING: home_assistant_init.sh failed"
-                }
-                log_upgrade "Zigbee configuration updated (fresh install)"
+        # 如果缺少 settings.json，则生成默认配置
+        if [ ! -f "/var/lib/homeassistant/music_assistant/settings.json" ]; then
+            info "settings.json missing, generating default config..."
+            if [ -x "/srv/music-assistant/bin/python3" ]; then
+                /srv/music-assistant/bin/python3 /srv/music-assistant/generate_mass_config.py \
+                    /srv/music-assistant/template.json \
+                    /var/lib/homeassistant/music_assistant/settings.json || warn "Failed to generate settings.json"
             else
-                info "No existing configuration.yaml, skipping zigbee config update"
+                warn "Generator not found at /srv/music-assistant/bin/python3"
             fi
         fi
-    else
-        info "Skipping zigbee config update during upgrade to preserve user data"
-        log_upgrade "Skipped zigbee initialization during upgrade"
-    fi
-}
 
-# 修复 Matter Server vendorId
-fix_matter_vendor_id() {
-    info "Checking Matter Server vendorId..."
-    
-    if [ -e "/srv/homeassistant/bin/home_assistant_matter_fix.sh" ]; then
-        chmod +x /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1
-
-        if [ -e "/var/lib/homeassistant/matter_server/chip.json" ]; then
-            /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1 || {
-                warn "home_assistant_matter_fix.sh failed, but continuing..." 
-                log_upgrade "WARNING: home_assistant_matter_fix.sh failed"
-            }
-            log_upgrade "Matter Server vendorId fixed"
+        # 复制 options.json 供默认使用
+        if [ -f "/srv/music-assistant/options.json" ]; then
+            cp -a /srv/music-assistant/options.json /var/lib/homeassistant/music_assistant/ || warn "Failed to copy options.json"
+        else
+            warn "options.json not found at /srv/music-assistant"
         fi
+    else
+        info "Skipping music assistant config update during upgrade to preserve user data"
+        log_upgrade "Skipped music assistant initialization during upgrade"
     fi
 }
 
@@ -161,8 +136,7 @@ configure_services() {
     info "Configuring systemd services..."
     
     /usr/bin/systemctl daemon-reload
-    /usr/bin/systemctl enable home-assistant.service
-    /usr/bin/systemctl enable matter-server.service
+    /usr/bin/systemctl enable music-assistant.service
     
     log_upgrade "Services enabled"
 }
@@ -170,72 +144,19 @@ configure_services() {
 # 检查网络连接并启动服务
 start_services_if_network_ready() {
     info "Checking network connectivity..."
-    
-    NETWORK_READY=false
-    
-    # 检查 WiFi 连接
-    if command -v iw >/dev/null 2>&1; then
-        msg=$(iw dev wlan0 link 2>&1)
-        if echo "$msg" | grep -q "Connected"; then
-            NETWORK_READY=true
-            info "WiFi network detected"
-        fi
-    fi
-    
-    # 检查有线网络（如果 WiFi 未连接）
-    if [ "$NETWORK_READY" = false ]; then
-        for iface in eth0 enp* eno*; do
-            if ip link show "$iface" 2>/dev/null | grep -q "state UP"; then
-                NETWORK_READY=true
-                info "Wired network detected on $iface"
-                break
-            fi
-        done
-    fi
-    
-    if [ "$NETWORK_READY" = true ]; then
-        info "Network is ready, starting services..."
-        /usr/bin/systemctl start home-assistant.service
-        /usr/bin/systemctl start matter-server.service
-        log_upgrade "Services started successfully"
-        
-        # 等待服务启动
-        sleep 5
-        
-        # 验证服务状态
-        if ! systemctl is-active --quiet home-assistant.service; then
-            warn "Home Assistant service may not have started correctly"
-            warn "Check logs: journalctl -u home-assistant.service"
-            log_upgrade "WARNING: Home Assistant service not active after start"
-        fi
-        
-        if ! systemctl is-active --quiet matter-server.service; then
-            warn "Matter Server service may not have started correctly"
-            warn "Check logs: journalctl -u matter-server.service"
-            log_upgrade "WARNING: Matter Server service not active after start"
-        fi
-    else
-        info "Network not ready, services will start automatically on next boot"
-        log_upgrade "Network not ready, deferred service start"
-    fi
+    /usr/bin/systemctl start music-assistant.service
+    log_upgrade "Services started successfully"
 }
 
-# 清理升级临时文件
-cleanup_upgrade_files() {
-    rm -f /tmp/hacore-upgrade-log-path.txt
-    rm -f /tmp/hacore-upgrade-backup-path.txt
-}
-
-# 显示升级完成信息
 show_completion_message() {
     local old_version="$1"
     
     echo ""
     info "========================================"
     if [ -z "$old_version" ]; then
-        info "Home Assistant Core installation completed successfully!"
+        info "Music Assistant installation completed successfully!"
     else
-        info "Home Assistant Core upgrade completed successfully!"
+        info "Music Assistant upgrade completed successfully!"
         info "Upgraded from version: $old_version"
     fi
     
@@ -275,12 +196,11 @@ main() {
         
         # 判断是否是首次安装
         if [ -z "$OLD_VERSION" ]; then
-            update_zigbee_config "true"  # 首次安装
+            update_music_assistant_config "true"  # 首次安装
         else
-            update_zigbee_config "false"  # 升级，跳过初始化
+            update_music_assistant_config "false"  # 升级，跳过初始化
         fi
         
-        fix_matter_vendor_id
         configure_services
         start_services_if_network_ready
         

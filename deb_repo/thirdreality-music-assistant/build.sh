@@ -200,7 +200,6 @@ fi
 if [ -d "${music_assistant_path}/bin" ]; then
     find ${music_assistant_path} -name "*.pyc" -delete
     find ${music_assistant_path} -name "__pycache__" -type d -exec rm -rf {} +
-    # z2m 脚本已弃用，不再复制
 fi
 
 if [ ! -f "/lib/systemd/system/music-assistant.service" ]; then
@@ -233,8 +232,16 @@ else
     print_info "Warning: widevine_cdm not found."
 fi
 
-mkdir -p ${output_dir}/srv/
-chmod 755 ${output_dir}/srv
+mkdir -p ${output_dir}/srv/music-assistant
+chmod 755 ${output_dir}/srv/music-assistant
+
+cp ${current_dir}/prebuild/generate_mass_config.py /srv/music-assistant/bin/generate_mass_config.py
+cp ${current_dir}/prebuild/template.json /srv/music-assistant/template.json
+cp ${current_dir}/prebuild/options.json /srv/music-assistant/options.json
+chmod 755 /srv/music-assistant/bin/generate_mass_config.py
+chmod 644 /srv/music-assistant/template.json
+chmod 644 /srv/music-assistant/options.json
+
 cp /srv/music-assistant ${output_dir}/srv/ -R
 
 mkdir -p ${output_dir}/lib/systemd/system/
