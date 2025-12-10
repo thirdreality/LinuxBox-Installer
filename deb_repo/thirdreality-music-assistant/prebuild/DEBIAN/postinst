@@ -93,7 +93,17 @@ setup_script_permissions() {
             chmod +x "/srv/music-assistant/bin/$script" > /dev/null 2>&1 || true
         fi
     done
-    
+
+    if [ -f "/usr/local/bin/ffmpeg" ]; then
+        chmod +x /usr/local/bin/ffmpeg
+        /usr/local/bin/ffmpeg -version
+    fi
+
+    if [ -f "/usr/local/bin/ffprobe" ]; then
+        chmod +x /usr/local/bin/ffprobe
+        /usr/local/bin/ffprobe -version
+    fi
+        
     log_upgrade "Script permissions configured"
 }
 
@@ -111,7 +121,7 @@ update_music_assistant_config() {
         if [ ! -f "/var/lib/homeassistant/music_assistant/settings.json" ]; then
             info "settings.json missing, generating default config..."
             if [ -x "/srv/music-assistant/bin/python3" ]; then
-                /srv/music-assistant/bin/python3 /srv/music-assistant/generate_mass_config.py \
+                /srv/music-assistant/bin/python3 /srv/music-assistant/bin/generate_mass_config.py \
                     /srv/music-assistant/template.json \
                     /var/lib/homeassistant/music_assistant/settings.json || warn "Failed to generate settings.json"
             else
@@ -146,6 +156,12 @@ start_services_if_network_ready() {
     info "Checking network connectivity..."
     /usr/bin/systemctl start music-assistant.service
     log_upgrade "Services started successfully"
+}
+
+# 清理升级临时文件
+cleanup_upgrade_files() {
+    rm -f /tmp/music-assistant-upgrade-log-path.txt || true
+    rm -f /tmp/music-assistant-upgrade-backup-path.txt || true
 }
 
 show_completion_message() {

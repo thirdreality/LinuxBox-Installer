@@ -38,15 +38,16 @@ print_info "Version: $version"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
-    #rm -rf ${current_dir}/*.deb > /dev/null 2>&1
+    rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
     systemctl stop music-assistant.service || true
     systemctl disable music-assistant.service || true
 
     rm -rf /lib/systemd/system/music-assistant.service
 
-    rm -rf ${widevine_cdm_path}
-
+    rm -rf ${widevine_cdm_path} || true
+    rm -rf /usr/local/bin/ffmpeg || true
+    rm -rf /usr/local/bin/ffprobe || true
     rm -rf /var/lib/homeassistant/music-assistant || true
 
     print_info "Removing ${music_assistant_path} ..."
@@ -197,6 +198,14 @@ else
     print_info "Warning: widevine_cdm directory not found in prebuild, skipping..."
 fi
 
+if [ -f "${current_dir}/prebuild/ffmpeg.tar.gz" ]; then
+    tar -xzf ${current_dir}/prebuild/ffmpeg.tar.gz -C /usr/local/bin/
+    chmod +x /usr/local/bin/ffmpeg
+    chmod +x /usr/local/bin/ffprobe
+else
+    print_info "Warning: ffmpeg.tar.gz not found in prebuild, skipping..."
+fi
+
 if [ -d "${music_assistant_path}/bin" ]; then
     find ${music_assistant_path} -name "*.pyc" -delete
     find ${music_assistant_path} -name "__pycache__" -type d -exec rm -rf {} +
@@ -208,13 +217,6 @@ if [ ! -f "/lib/systemd/system/music-assistant.service" ]; then
         systemctl daemon-reload
     else
         print_info "Warning: music-assistant.service not found in prebuild, skipping..."
-    fi
-fi
-
-if [ ! -f "/usr/lib/systemd/system/home-assistant.service" ]; then
-    if [ -f "${current_dir}/prebuild/home-assistant.service" ]; then
-        cp ${current_dir}/prebuild/home-assistant.service /usr/lib/systemd/system/home-assistant.service
-        systemctl daemon-reload
     fi
 fi
 
@@ -230,6 +232,18 @@ if [ -f "/usr/local/bin/widevine_cdm/private_key.pem" ]; then
     cp /usr/local/bin/widevine_cdm ${output_dir}/usr/local/bin/ -R
 else
     print_info "Warning: widevine_cdm not found."
+fi
+
+if [ -f "/usr/local/bin/ffmpeg" ]; then
+    cp /usr/local/bin/ffmpeg ${output_dir}/usr/local/bin/
+else
+    print_info "Warning: ffmpeg not found."
+fi
+
+if [ -f "/usr/local/bin/ffprobe" ]; then
+    cp /usr/local/bin/ffprobe ${output_dir}/usr/local/bin/
+else
+    print_info "Warning: ffprobe not found."
 fi
 
 mkdir -p ${output_dir}/srv/music-assistant

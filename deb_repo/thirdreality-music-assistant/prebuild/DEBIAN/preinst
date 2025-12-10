@@ -36,7 +36,7 @@ stop_services() {
     
     if [[ "$(/usr/bin/systemctl is-active home-assistant.service)" == "active" ]]; then
         log_info "Stopping music-assistant.service"
-        /usr/bin/systemctl stop music-assistant.service || true
+        /usr/bin/systemctl stop music-assistant.service > /dev/null 2>&1 || true
     fi
 }
 

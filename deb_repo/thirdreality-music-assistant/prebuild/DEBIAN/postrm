@@ -36,7 +36,8 @@ cleanup_application_files() {
 
 # 清理升级备份（可选）
 cleanup_backups() {
-
+    # No-op placeholder; keep for future backup cleanup logic
+    :
 }
 
 # 保留用户数据提示
@@ -45,8 +46,8 @@ show_data_retention_info() {
         log_info "=============================================="
         log_info "User data preserved in /var/lib/homeassistant/music-assistant"
         log_info "This includes:"
-        log_info "  - Home Assistant configuration"
-        log_info "  - Device databases"
+        log_info "  - Music Assistant configuration"
+        log_info "  - Library databases"
         log_info "  - Upgrade backups"
         log_info "  - Upgrade logs"
         log_info ""

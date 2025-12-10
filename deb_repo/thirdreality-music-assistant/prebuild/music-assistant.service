@@ -5,13 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=YOUR_USERNAME
-WorkingDirectory=/opt/music-assistant
-Environment="PATH=/opt/music-assistant/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="VIRTUAL_ENV=/opt/music-assistant/venv"
-# 使用 jemalloc 优化内存管理（可选但推荐）
-Environment="LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2"
-ExecStart=/opt/music-assistant/venv/bin/mass --data-dir /opt/music-assistant/data --cache-dir /opt/music-assistant/data/.cache
+WorkingDirectory=/srv/music-assistant
+Environment="PATH=/srv/music-assistant/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="VIRTUAL_ENV=/srv/music-assistant"
+Environment="LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2"
+ExecStart=/srv/music-assistant/bin/mass --data-dir /var/lib/homeassistant/music_assistant --cache-dir /var/lib/homeassistant/music_assistant/.cache
 Restart=on-failure
 RestartSec=10
 
