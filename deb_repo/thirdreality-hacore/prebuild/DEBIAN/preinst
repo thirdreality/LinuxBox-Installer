@@ -171,7 +171,7 @@ handle_upgrade() {
     UPGRADE_LOG_DIR="/var/lib/homeassistant/upgrade-logs"
     mkdir -p "$UPGRADE_LOG_DIR"
     
-    UPGRADE_LOG="$UPGRADE_LOG_DIR/upgrade-$(date +%Y%m%d-%H%M%S).log"
+    UPGRADE_LOG="$UPGRADE_LOG_DIR/hacore-$(date +%Y%m%d-%H%M%S).log"
     
     {
         echo "========================================"
@@ -181,7 +181,7 @@ handle_upgrade() {
     } >> "$UPGRADE_LOG"
     
     # 创建升级备份
-    BACKUP_DIR="/var/lib/homeassistant/backup-$(date +%Y%m%d-%H%M%S)"
+    BACKUP_DIR="/var/lib/homeassistant/hacore-backup-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$BACKUP_DIR"
     
     log_info "Creating backup in $BACKUP_DIR..."

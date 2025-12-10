@@ -35,7 +35,7 @@ on_exit() {
     # Custom actions before the script exits
     echo "Running cleanup tasks..."
     if [ -e "/usr/local/bin/supervisor" ]; then
-        /usr/local/bin/supervisor led sys_event_off  || true
+        /usr/local/bin/supervisor led sys_event_off || true
     fi
 
     echo "System finished to install deb packages. " | wall
@@ -80,17 +80,21 @@ exclude_patterns=(
     # "homeassistant-supervised"
 
     "board_firmware_"
+    "linuxbox-supervisor_"
 
-    "hacore-config_"
     "python3_"
+    "hacore-config_"
     "hacore_"
     "otbr-agent_"
 
-    "linuxbox-supervisor_"
-
     "zigbee-mqtt_"
-    
+
     "openhab_"
+    "music-assistant_"
+    "enocean_"
+    "zwave_"
+    
+    "linux-image-current-meson64_"
 )
 
 
@@ -427,19 +431,42 @@ update_ota_for_debug()
         echo 0
         return 0
     fi
+    # If there is no .ota file in DEBUG_OTA_DIR, nothing to do
+    if ! ls "$DEBUG_OTA_DIR"/*.ota 1> /dev/null 2>&1; then
+        echo 0 >&2
+        echo 0
+        return 0
+    fi
 
-    # Update ZHA OTA configuration
-    local zha_updated
-    zha_updated=$(update_zha_ota_config)
-    total_updated=$((total_updated + zha_updated))
+    # Ensure local OTA index files exist; if both missing, try to generate them
+    local zigpy_index="$DEBUG_OTA_DIR/local_index.json"
+    local z2m_index="$DEBUG_OTA_DIR/local_z2m_index.json"
+    local gen_script="/usr/lib/thirdreality/hubv3-generate-ota-indexes.sh"
+
+    if [ ! -f "$zigpy_index" ] && [ ! -f "$z2m_index" ]; then
+        if [ -x "$gen_script" ]; then
+            echo "[DEBUG-OTA] Generating OTA indexes using $gen_script $DEBUG_OTA_DIR" >&2
+            "$gen_script" "$DEBUG_OTA_DIR" || echo "[DEBUG-OTA] WARNING: OTA index generation script failed" >&2
+        elif [ -f "$gen_script" ]; then
+            echo "[DEBUG-OTA] Found $gen_script but not executable, trying with sh" >&2
+            sh "$gen_script" "$DEBUG_OTA_DIR" || echo "[DEBUG-OTA] WARNING: OTA index generation via sh failed" >&2
+        else
+            echo "[DEBUG-OTA] OTA index generator not found: $gen_script" >&2
+        fi
+    fi
+
+    # # Update ZHA OTA configuration
+    # local zha_updated
+    # zha_updated=$(update_zha_ota_config)
+    # total_updated=$((total_updated + zha_updated))
     
-    # Update Z2M OTA configuration
-    local z2m_updated
-    z2m_updated=$(update_z2m_ota_config)
-    total_updated=$((total_updated + z2m_updated))
+    # # Update Z2M OTA configuration
+    # local z2m_updated
+    # z2m_updated=$(update_z2m_ota_config)
+    # total_updated=$((total_updated + z2m_updated))
     
-    echo "$total_updated" >&2
-    echo "$total_updated"
+    # echo "$total_updated" >&2
+    # echo "$total_updated"
     return 0
 }
 
@@ -449,8 +476,11 @@ update_firmware_for_debug()
         return 0
     fi
 
+    echo "[DEBUG-FW] PATH at entry: $PATH" >&2
+
     local fw_dir="/usr/lib/firmware/bl706/partition_1m_images"
     local flasher_bin="/usr/lib/firmware/bl706/bl706_func.sh"
+    local bl706_env_path="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"  # ensure python3 resolves to system interpreter
 
     # Handle Zigbee firmware
     if [ -f "$DEBUG_FIRMWARE_DIR/blz_whole_img.bin" ]; then
@@ -477,7 +507,7 @@ update_firmware_for_debug()
         fi
 
         if [ -x "$flasher_bin" ]; then
-            "$flasher_bin" flash blz || true
+            PATH="$bl706_env_path" "$flasher_bin" flash blz || true
         else
             echo "[DEBUG-FW][WARN] Flasher binary not found or not executable: $flasher_bin" >&2
         fi
@@ -515,7 +545,7 @@ update_firmware_for_debug()
         fi
 
         if [ -x "$flasher_bin" ]; then
-            "$flasher_bin" flash thread || true
+            PATH="$bl706_env_path" "$flasher_bin" flash thread || true
         else
             echo "[DEBUG-FW][WARN] Flasher binary not found or not executable: $flasher_bin" >&2
         fi
@@ -778,6 +808,9 @@ install_board_flash_debs() {
             if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
                 echo "Newer version available. Installing: $board_firmware_deb_file"
                 dpkg_install "$board_firmware_deb_file" "thirdreality-board-firmware"
+                if [ -f /var/lib/thirdreality/led.conf ]; then
+                    rm -f /var/lib/thirdreality/led.conf || true
+                fi
             else
                 echo "Installed version is up-to-date. No installation needed."
             fi
@@ -786,6 +819,9 @@ install_board_flash_debs() {
             if [ -f "$WORK_DIR/.force_board_flash" ]; then
                 echo "Force flag found, installing board firmware without version check"
                 dpkg_install "$board_firmware_deb_file" "thirdreality-board-firmware"
+                if [ -f /var/lib/thirdreality/led.conf ]; then
+                    rm -f /var/lib/thirdreality/led.conf || true
+                fi
             elif [ -f "/etc/t3r-release" ]; then
                 # Read version information from /etc/t3r-release
                 source "/etc/t3r-release"
@@ -808,6 +844,9 @@ install_board_flash_debs() {
                         if [ "$deb_zigbee_version" -gt "$system_zigbee_version" ] || [ "$deb_thread_version" -gt "$system_thread_version" ]; then
                             echo "Either zigbee or thread version is newer. Installing: $board_firmware_deb_file"
                             dpkg_install "$board_firmware_deb_file" "thirdreality-board-firmware"
+                            if [ -f /var/lib/thirdreality/led.conf ]; then
+                                rm -f /var/lib/thirdreality/led.conf || true
+                            fi
                         else
                             echo "Version check failed. Zigbee: $deb_zigbee_version > $system_zigbee_version, Thread: $deb_thread_version > $system_thread_version"
                             echo "No installation needed."
@@ -907,6 +946,102 @@ install_openhab_debs()
     echo "Attempting to install OpenHAB debs..."
 }
 
+install_music_assistant_debs()
+{
+    echo "Attempting to install Music Assistant debs..."
+
+    music_assistant_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "music-assistant_*.deb" -type f | head -n 1)
+    if [ -n "$music_assistant_deb_file" ]; then
+        install_deb_if_needed "$music_assistant_deb_file" "thirdreality-music-assistant"
+    else
+        echo "No music-assistant deb file found in $WORK_DIR" >&2
+    fi
+}
+
+install_enocean_debs()
+{
+    echo "Attempting to install EnOcean debs..."
+}
+
+install_zwave_debs()
+{
+    echo "Attempting to install Z-Wave debs..."
+}
+
+install_linux_image_deb() {
+    if [ ! -d "$WORK_DIR" ]; then
+        return 0
+    fi
+
+    echo "Attempting to install linux-image kernel deb..."
+
+    # Find linux-image deb file
+    linux_image_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "linux-image-current-meson64_*.deb" -type f | head -n 1)
+    
+    if [ -n "$linux_image_deb_file" ]; then
+        echo "Found linux-image deb: $linux_image_deb_file"
+        
+        # Get deb version number
+        deb_version=$(dpkg-deb --info "${linux_image_deb_file}" | grep Version | awk '{print $2}')
+        echo "Linux-image deb version: $deb_version"
+        
+        local need_reboot=false
+        
+        # Check if already installed
+        if dpkg -l | grep -q "^ii\s*linux-image-current-meson64"; then
+            # Get installed version number
+            installed_version=$(dpkg-query -W -f='${Version}\n' "linux-image-current-meson64" 2>/dev/null || true)
+            echo "Installed version: $installed_version"
+            
+            # Compare version numbers, install if deb version is greater than installed version
+            if dpkg --compare-versions "$deb_version" gt "$installed_version"; then
+                echo "Newer kernel version available. Installing: $linux_image_deb_file"
+                if DEBIAN_FRONTEND=noninteractive dpkg -i "$linux_image_deb_file"; then
+                    echo "Kernel installation completed."
+                    apt-mark manual "linux-image-current-meson64" || echo "Warning: Failed to mark kernel as manual" >&2
+                    need_reboot=true
+                else
+                    echo "Warning: Failed to install $linux_image_deb_file" >&2
+                fi
+            else
+                echo "Installed kernel version is up-to-date. No installation needed."
+            fi
+        else
+            # Not installed before, install directly
+            echo "linux-image-current-meson64 is not installed. Installing: $linux_image_deb_file"
+            if DEBIAN_FRONTEND=noninteractive dpkg -i "$linux_image_deb_file"; then
+                echo "Kernel installation completed."
+                apt-mark manual "linux-image-current-meson64" || echo "Warning: Failed to mark kernel as manual" >&2
+                need_reboot=true
+            else
+                echo "Warning: Failed to install $linux_image_deb_file" >&2
+            fi
+        fi
+        
+        # If kernel was installed, sync multiple times and reboot
+        if [ "$need_reboot" = true ]; then
+            echo "Kernel updated, preparing to reboot system..."
+            echo "Syncing filesystem multiple times to ensure NAND cache is flushed..."
+            
+            # Multiple sync calls to handle NAND cache issues
+            for i in {1..5}; do
+                echo "Sync $i/5..."
+                /usr/bin/sync
+                sleep 1
+            done
+            
+            echo "Filesystem sync completed. Rebooting system in 3 seconds..."
+            sleep 3
+            /sbin/reboot
+            exit 0
+        fi
+    else
+        echo "No linux-image deb file found in $WORK_DIR"
+    fi
+    
+    return 0
+}
+
 
 install_supervisor_deb() {
     if [ ! -d "$WORK_DIR" ]; then
@@ -952,17 +1087,178 @@ install_supervisor_deb() {
     return 0
 }
 
-validate_config() {
-    # Validate configuration and clean up invalid flags
-    if [ -d "/mnt/R3Backup" ] && { [ -f "/mnt/R3Backup/.enable-backup" ] || [ -f "/mnt/R3Backup/.enable_backup" ]; }; then
-        # Check if thirdreality-python3 package is installed
-        if ! dpkg -l | grep -q "^ii\s*thirdreality-python3"; then
-            echo "Warning: .enable-backup flag found but thirdreality-python3 package not installed"
-            echo "Removing .enable-backup flag..."
-            rm -f "/mnt/R3Backup/.enable-backup" "/mnt/R3Backup/.enable_backup"
-            echo ".enable-backup flag removed due to missing thirdreality-python3 package"
-        fi
+is_backup_capable() {
+    if dpkg -l | grep -q "^ii\s*thirdreality-hacore"; then
+        return 0
     fi
+    if dpkg -l | grep -q "^ii\s*thirdreality-zigbee-mqtt"; then
+        return 0
+    fi
+    return 1
+}
+
+wait_for_backup_completion() {
+    local max_wait=300  # Maximum wait time in seconds (5 minutes)
+    local wait_interval=2  # Check interval in seconds
+    local elapsed=0
+    local api_url="http://127.0.0.1:8086/api/task/info?task=setting"
+    
+    echo "Waiting for backup to complete..."
+    
+    while [ $elapsed -lt $max_wait ]; do
+        sleep $wait_interval
+        elapsed=$((elapsed + wait_interval))
+        
+        # Query backup status
+        local response
+        response=$(curl -s "$api_url" 2>/dev/null || echo "")
+        
+        if [ -z "$response" ]; then
+            # API might not be ready yet, continue waiting
+            continue
+        fi
+        
+        # Parse JSON response to extract status and progress
+        # Try using jq if available, otherwise use grep/awk
+        local status
+        local progress
+        
+        if command -v jq >/dev/null 2>&1; then
+            status=$(echo "$response" | jq -r '.data.status // "unknown"' 2>/dev/null || echo "unknown")
+            progress=$(echo "$response" | jq -r '.data.progress // 0' 2>/dev/null || echo "0")
+        else
+            # Fallback: simple text parsing
+            status=$(echo "$response" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"' | tr -d '"' || echo "unknown")
+            progress=$(echo "$response" | grep -o '"progress"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*' || echo "0")
+        fi
+        
+        # Check if backup is completed (failed or success with progress 100)
+        if [ "$status" = "failed" ]; then
+            echo "Backup failed: $(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"' | tr -d '"' || echo "Unknown error")"
+            return 0
+        elif [ "$status" = "success" ] && [ "$progress" -eq 100 ]; then
+            echo "Backup completed successfully (progress: ${progress}%)"
+            return 0
+        elif [ "$status" = "running" ]; then
+            # Still running, show progress if available
+            if [ -n "$progress" ] && [ "$progress" -gt 0 ]; then
+                echo "Backup in progress: ${progress}%"
+            fi
+            continue
+        fi
+    done
+    
+    echo "Warning: Backup did not complete within ${max_wait} seconds"
+    return 1
+}
+
+wait_for_restore_completion() {
+    local max_wait=300  # Maximum wait time in seconds (5 minutes)
+    local wait_interval=2  # Check interval in seconds
+    local elapsed=0
+    local api_url="http://127.0.0.1:8086/api/task/info?task=setting"
+    
+    echo "Waiting for restore to complete..."
+    
+    while [ $elapsed -lt $max_wait ]; do
+        sleep $wait_interval
+        elapsed=$((elapsed + wait_interval))
+        
+        # Query restore status
+        local response
+        response=$(curl -s "$api_url" 2>/dev/null || echo "")
+        
+        if [ -z "$response" ]; then
+            # API might not be ready yet, continue waiting
+            continue
+        fi
+        
+        # Parse JSON response to extract status and progress
+        # Try using jq if available, otherwise use grep/awk
+        local status
+        local progress
+        
+        if command -v jq >/dev/null 2>&1; then
+            status=$(echo "$response" | jq -r '.data.status // "unknown"' 2>/dev/null || echo "unknown")
+            progress=$(echo "$response" | jq -r '.data.progress // 0' 2>/dev/null || echo "0")
+        else
+            # Fallback: simple text parsing
+            status=$(echo "$response" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"' | tr -d '"' || echo "unknown")
+            progress=$(echo "$response" | grep -o '"progress"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*' || echo "0")
+        fi
+        
+        # Check if restore is completed (failed with progress 100, or success with progress 100)
+        if [ "$status" = "failed" ] && [ "$progress" -eq 100 ]; then
+            echo "Restore failed: $(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -o '"[^"]*"' | tr -d '"' || echo "Unknown error")"
+            return 0
+        elif [ "$status" = "success" ] && [ "$progress" -eq 100 ]; then
+            echo "Restore completed successfully (progress: ${progress}%)"
+            return 0
+        elif [ "$status" = "running" ]; then
+            # Still running, show progress if available
+            if [ -n "$progress" ] && [ "$progress" -gt 0 ]; then
+                echo "Restore in progress: ${progress}%"
+            fi
+            continue
+        fi
+    done
+    
+    echo "Warning: Restore did not complete within ${max_wait} seconds"
+    return 1
+}
+
+perform_backup_if_ready() {
+    local backup_dir="/mnt/R3Backup"
+    local flag_primary="$backup_dir/.enable-backup"
+    local flag_alt="$backup_dir/.enable_backup"
+
+    if [ ! -d "$backup_dir" ] || [ ! -x "/usr/local/bin/supervisor" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$flag_primary" ] && [ ! -f "$flag_alt" ]; then
+        return 0
+    fi
+
+    if is_backup_capable; then
+        /usr/local/bin/supervisor led sys_event_off || true
+        echo "Found .enable-backup flag, forcing backup..."
+        echo "System found .enable-backup flag, forcing backup..." | wall
+        /usr/local/bin/supervisor setting backup || true
+        
+        # Wait 1 second before checking status
+        sleep 1
+        
+        # Wait for backup to complete
+        wait_for_backup_completion
+        
+        rm -f "$flag_primary" "$flag_alt"
+        echo "Backup completed, .enable-backup flag removed"
+        /usr/local/bin/supervisor led sys_event_off || true
+    else
+        echo "Backup flag detected but required packages not installed; deferring backup."
+    fi
+}
+
+validate_config() {
+    local backup_dir="/mnt/R3Backup"
+    local flag_primary="$backup_dir/.enable-backup"
+    local flag_alt="$backup_dir/.enable_backup"
+
+    if [ ! -d "$backup_dir" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$flag_primary" ] && [ ! -f "$flag_alt" ]; then
+        return 0
+    fi
+
+    if is_backup_capable; then
+        return 0
+    fi
+
+    echo "Warning: Backup flag present but required packages are missing. Removing flag..."
+    rm -f "$flag_primary" "$flag_alt"
 }
 
 main_procedure()
@@ -978,6 +1274,7 @@ main_procedure()
 
     # install supervisor
     install_supervisor_deb
+    perform_backup_if_ready
 
     # install board firmware
     install_board_flash_debs
@@ -1016,6 +1313,9 @@ main_procedure()
 
         # install openhab
         install_openhab_debs
+        install_music_assistant_debs
+        install_enocean_debs
+        install_zwave_debs
 
         # install zigpy_handler
         #install_zigpy_handler_debs
@@ -1031,17 +1331,7 @@ main_procedure()
 
     # Auto restore functionality
     if [ -d "/mnt/R3Backup" ] && [ -e "/usr/local/bin/supervisor" ]; then
-        # Check if .enable-backup exists - force backup and exit
-        if [ -f "/mnt/R3Backup/.enable-backup" ] || [ -f "/mnt/R3Backup/.enable_backup" ]; then
-            /usr/local/bin/supervisor led sys_event_off || true
-            echo "Found .enable-backup flag, forcing backup..."
-            echo "System found .enable-backup flag, forcing backup..." | wall
-            /usr/local/bin/supervisor setting backup || true
-            rm -f "/mnt/R3Backup/.enable-backup" "/mnt/R3Backup/.enable_backup"
-            echo "Backup completed, .enable-backup flag removed"
-            /usr/local/bin/supervisor led sys_event_off || true
-            return 0
-        fi
+        perform_backup_if_ready
         
         # Check if .enable-restore exists - force restore if flag is present
         if [ -f "/mnt/R3Backup/.enable-restore" ] || [ -f "/mnt/R3Backup/.enable_restore" ]; then
@@ -1051,6 +1341,13 @@ main_procedure()
                 echo "Found .enable-restore flag, attempting to restore..."
                 echo "System found .enable-restore flag, attempting to restore..." | wall
                 /usr/local/bin/supervisor setting restore || true
+                
+                # Wait 1 second before checking status
+                sleep 1
+                
+                # Wait for restore to complete
+                wait_for_restore_completion
+                
                 /usr/local/bin/supervisor led sys_event_off || true
                 echo "Restore completed, .enable-restore flag removed"
                 rm -f "/mnt/R3Backup/.enable-restore" "/mnt/R3Backup/.enable_restore"
@@ -1062,6 +1359,8 @@ main_procedure()
     fi
 
     # Update OTA configurations
+    update_ota_for_debug
+    
     local zha_ota_updated=0
     local z2m_ota_updated=0
     if [ -d "$DEBUG_OTA_DIR" ]; then
@@ -1118,6 +1417,9 @@ main_procedure()
 
         /usr/bin/sync
     fi
+
+    # install linux kernel image (must be before other packages, will reboot if updated)
+    install_linux_image_deb    
 }
 
 

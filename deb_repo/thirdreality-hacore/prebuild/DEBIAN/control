@@ -1,8 +1,9 @@
 Package: thirdreality-hacore
-Version: 2025.11.3
+Version: 2025.12.0
 Section: utils
 Priority: optional
 Architecture: arm64
+Depends: thirdreality-python3
 Maintainer: guoping.liu <guoping.liu@3reality.com>
 Description: A custom home-assistant-core-matter-server package for ThirdReality LinuxBox Dev Edition.
  A longer description of the package.

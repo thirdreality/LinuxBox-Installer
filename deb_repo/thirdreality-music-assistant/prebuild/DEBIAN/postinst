@@ -123,7 +123,7 @@ update_music_assistant_config() {
             if [ -x "/srv/music-assistant/bin/python3" ]; then
                 /srv/music-assistant/bin/python3 /srv/music-assistant/bin/generate_mass_config.py \
                     /srv/music-assistant/template.json \
-                    /var/lib/homeassistant/music_assistant/settings.json || warn "Failed to generate settings.json"
+                    /var/lib/homeassistant/music_assistant || warn "Failed to generate settings.json"
             else
                 warn "Generator not found at /srv/music-assistant/bin/python3"
             fi
