@@ -204,7 +204,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
 
     print_info "Build zigbee-herdsman ..."
     mkdir -p /opt/zigbee-herdsman
-    git clone -b 3r_blz_6.0.1 https://github.com/thirdreality/zigbee-herdsman.git /opt/zigbee-herdsman
+    git clone -b 3r_blz_7.0.3 https://github.com/thirdreality/zigbee-herdsman.git /opt/zigbee-herdsman
 
     cd /opt/zigbee-herdsman
     dirty_id=$(/usr/bin/git describe --dirty --always)
@@ -222,7 +222,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     print_info "Build zigbee2mqtt ..."
     mkdir -p /opt/zigbee2mqtt
     #git clone --depth 1 https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
-    git clone -b 3r_blz_2.6.3 https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
+    git clone -b 3r_blz_2.7.0 https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
 
     cd /opt/zigbee2mqtt
     dirty_id=$(/usr/bin/git describe --dirty --always)
@@ -243,9 +243,10 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     cp ${current_dir}/prebuild/configuration_blz.yaml /opt/zigbee2mqtt/data/configuration_blz.yaml
 
     mkdir -p /opt/zigbee2mqtt/data/external_converters
-    cp ${current_dir}/prebuild/motion.js /opt/zigbee2mqtt/data/external_converters/
-
-    #npm run build
+    if [ -d "${current_dir}/prebuild/converters" ]; then
+        print_info "Copy converters to /opt/zigbee2mqtt/data/external_converters ..."
+        cp ${current_dir}/prebuild/converters/*.js /opt/zigbee2mqtt/data/external_converters/ || true
+    fi
 else
     cd /opt/zigbee-herdsman
     dirty_id=$(/usr/bin/git describe --dirty --always)
