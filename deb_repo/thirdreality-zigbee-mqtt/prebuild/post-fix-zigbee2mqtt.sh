@@ -279,13 +279,14 @@ check_ha_integration_mode() {
     fi
     
     # Check if ZHA integration is enabled
-    if grep -q '"domain":"zha"' "$ha_config_file"; then
+    # Allow whitespace in JSON (HA stores keys with spaces after colon)
+    if grep -Eq '"domain"[[:space:]]*:[[:space:]]*"zha"' "$ha_config_file"; then
         log "INFO: ZHA integration detected in Home Assistant config"
         return 1  # ZHA mode - disable zigbee2mqtt services
     fi
     
     # Check if MQTT integration is enabled
-    if grep -q '"domain":"mqtt"' "$ha_config_file"; then
+    if grep -Eq '"domain"[[:space:]]*:[[:space:]]*"mqtt"' "$ha_config_file"; then
         log "INFO: MQTT integration detected in Home Assistant config"
         return 0  # MQTT mode - enable zigbee2mqtt services
     fi

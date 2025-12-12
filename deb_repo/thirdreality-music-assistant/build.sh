@@ -249,6 +249,10 @@ fi
 mkdir -p ${output_dir}/srv/music-assistant
 chmod 755 ${output_dir}/srv/music-assistant
 
+
+cp ${current_dir}/prebuild/post-fix-music-assistant.sh /srv/music-assistant/bin/post-fix-music-assistant.sh
+chmod 755 /srv/music-assistant/bin/post-fix-music-assistant.sh
+
 cp ${current_dir}/prebuild/generate_mass_config.py /srv/music-assistant/bin/generate_mass_config.py
 cp ${current_dir}/prebuild/template.json /srv/music-assistant/template.json
 cp ${current_dir}/prebuild/options.json /srv/music-assistant/options.json
@@ -263,6 +267,15 @@ if [ -f "/lib/systemd/system/music-assistant.service" ]; then
     cp /lib/systemd/system/music-assistant.service ${output_dir}/lib/systemd/system/
 else
     print_info "Warning: music-assistant.service not found in /lib/systemd/system/, skipping..."
+fi
+
+if [ -d "${current_dir}/prebuild/debs/" ]; then
+    mkdir -p ${output_dir}/lib/thirdreality/archives_music_assistant/
+    for deb_file in ${current_dir}/prebuild/debs/*.deb; do
+        if [ -f "$deb_file" ]; then
+            cp "$deb_file" ${output_dir}/lib/thirdreality/archives_music_assistant/
+        fi
+    done
 fi
 
 # 清理输出目录中的Python缓存文件与目录，避免打包冗余内容

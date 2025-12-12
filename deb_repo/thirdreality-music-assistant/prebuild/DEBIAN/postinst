@@ -86,6 +86,7 @@ setup_script_permissions() {
     
     local scripts=(
         "generate_mass_config.py"
+        "post-fix-music-assistant.sh"
     )
     
     for script in "${scripts[@]}"; do
@@ -228,6 +229,10 @@ main() {
     elif [ "$1" = "fix-dependency" ]; then
         info "fix-dependency"
         log_upgrade "Running fix-dependency"
+        if [ -e "/srv/music-assistant/bin/post-fix-music-assistant.sh" ]; then
+            chmod +x /srv/music-assistant/bin/post-fix-music-assistant.sh
+            /srv/music-assistant/bin/post-fix-music-assistant.sh > /dev/null || true
+        fi
     fi
 }
 
