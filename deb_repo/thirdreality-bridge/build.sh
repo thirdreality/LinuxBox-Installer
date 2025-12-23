@@ -83,17 +83,17 @@ if [ -d "${prebuild_dir}" ]; then
         exit 1
     fi
     
-    # Copy configuration files
+    # Copy configuration files as .default (to avoid overwriting user modifications)
     if [ -f "${prebuild_dir}/command.sh" ]; then
-        cp "${prebuild_dir}/command.sh" "${output_dir}/var/lib/hubv3-bridge/"
-        chmod +x "${output_dir}/var/lib/hubv3-bridge/command.sh"
+        cp "${prebuild_dir}/command.sh" "${output_dir}/var/lib/hubv3-bridge/command.sh.default"
+        chmod +x "${output_dir}/var/lib/hubv3-bridge/command.sh.default"
     else
         print_error "command.sh not found in prebuild directory"
         exit 1
     fi
     
     if [ -f "${prebuild_dir}/configuration.yaml" ]; then
-        cp "${prebuild_dir}/configuration.yaml" "${output_dir}/var/lib/hubv3-bridge/"
+        cp "${prebuild_dir}/configuration.yaml" "${output_dir}/var/lib/hubv3-bridge/configuration.yaml.default"
     else
         print_warn "configuration.yaml not found in prebuild directory (optional)"
     fi

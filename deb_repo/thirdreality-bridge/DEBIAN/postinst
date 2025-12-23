@@ -11,8 +11,26 @@ if [ "$1" = "configure" ]; then
 		chmod +x /usr/local/bin/linuxbox-hubv3-bridge > /dev/null 2>&1
 	fi
 
+	# Ensure data dir exists
+	mkdir -p /var/lib/hubv3-bridge > /dev/null 2>&1
+
+	# Handle command.sh: prefer existing user file, otherwise create from default
 	if [ -f "/var/lib/hubv3-bridge/command.sh" ]; then
+		info "Keeping existing command.sh (user may have modified it)"
 		chmod +x /var/lib/hubv3-bridge/command.sh > /dev/null 2>&1
+	elif [ -f "/var/lib/hubv3-bridge/command.sh.default" ]; then
+		info "Creating command.sh from default template"
+		cp /var/lib/hubv3-bridge/command.sh.default /var/lib/hubv3-bridge/command.sh
+		chmod +x /var/lib/hubv3-bridge/command.sh > /dev/null 2>&1
+	fi
+
+	# Handle configuration.yaml: only create if missing
+	if [ ! -f "/var/lib/hubv3-bridge/configuration.yaml" ] && \
+	   [ -f "/var/lib/hubv3-bridge/configuration.yaml.default" ]; then
+		info "Creating configuration.yaml from default template"
+		cp /var/lib/hubv3-bridge/configuration.yaml.default /var/lib/hubv3-bridge/configuration.yaml
+	elif [ -f "/var/lib/hubv3-bridge/configuration.yaml" ]; then
+		info "Keeping existing configuration.yaml (user may have modified it)"
 	fi
 
     # Reload systemd units before enabling/starting services
