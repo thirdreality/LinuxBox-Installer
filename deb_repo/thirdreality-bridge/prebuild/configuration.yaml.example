@@ -1,0 +1,92 @@
+# LinuxBox HubV3 Bridge Configuration File
+# Default location: /var/lib/hubv3-bridge/configuration.yaml
+#
+# This is a simplified example showing only the core configuration options.
+# Unused sources and sinks are omitted and default to disabled state.
+
+version: 1
+
+common:
+  logging:
+    level: info
+
+# ============================================================================
+# SOURCES - Choose ONE source (HomeAssistant OR MQTT, not both)
+# ============================================================================
+
+sources:
+  # Option 1: MQTT Source (e.g., Zigbee2MQTT integration)
+  mqtt:
+    enabled: true
+    verbose: false
+    server: mqtt://localhost:1883
+    topic: zigbee2mqtt
+    user: thirdreality
+    password: thirdreality
+    # Multiple topics support (uncomment to use):
+    # topics:
+    #   - homeassistant
+    #   - zigbee2mqtt
+
+  # Option 2: Home Assistant Source (uncomment to use)
+  # Note: Only ONE source can be enabled at a time
+  # homeassistant:
+  #   enabled: false
+  #   verbose: true
+  #   host: 192.168.1.100
+  #   port: 8123
+  #   token: "your-long-lived-access-token"
+  #   domains:
+  #     - matter
+  #     - mqtt
+  #     - zha
+  #     - zwave
+  #   mappings:
+  #     - model: "3RSB22BZ"
+  #       device_type: "BUTTON"
+  #     - model: "BL706"
+  #       device_type: "DONGLE"
+
+# ============================================================================
+# PIPELINE - Data processing configuration
+# ============================================================================
+
+pipeline:
+  # Command execution script for remote control
+  command: "/var/lib/hubv3-bridge/command.sh"
+
+# ============================================================================
+# SINKS - Data output destinations (multiple can be enabled)
+# ============================================================================
+
+sinks:
+  # HM MQTT Sink - Cloud integration
+  hm_mqtt:
+    enabled: true
+    fiter_enable: true
+    # Credentials and topics are fetched from cloud API
+    http: https://hm.3reality.co/api/hub/v1
+    # Optional: TLS/SSL configuration
+    # ca: "/path/to/ca.pem"
+    # cert: "/path/to/cert.pem"
+    # key: "/path/to/key.pem"
+
+  # MQTT Discovery Sink (uncomment to use)
+  # mqtt_discovery:
+  #   enabled: false
+  #   topic: "homeassistant"
+  #   server: mqtt://remote-monitoring-mqtt:1883
+  #   user: monitoring_user
+  #   password: monitoring_pass
+
+  # Standard MQTT Sink (uncomment to use)
+  # mqtt:
+  #   enabled: false
+  #   topics:
+  #     - homeassistant
+  #     - zigbee2mqtt
+  #   server: mqtt://192.168.1.100:1883
+  #   user: thirdreality
+  #   password: thirdreality
+
+

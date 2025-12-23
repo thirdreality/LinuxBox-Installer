@@ -1,0 +1,41 @@
+# LinuxBox HubV3 Bridge Configuration File
+# Default location: /var/lib/hubv3-bridge/configuration.yaml
+
+version: 1
+
+common:
+  logging:
+    level: info
+
+sources:
+  # MQTT Source - Zigbee2MQTT integration
+  mqtt:
+    enabled: true
+    verbose: false
+    server: mqtt://localhost:1883
+    topic: zigbee2mqtt
+    #topics:              # Multiple topics (uncomment to use)
+    #  - homeassistant
+    #  - zigbee2mqtt
+    user: thirdreality
+    password: thirdreality
+
+pipeline:
+  # Command execution script for remote control
+  command: "/var/lib/hubv3-bridge/command.sh"
+
+sinks:
+  # HM MQTT Sink - Cloud integration
+  hm_mqtt:
+    enabled: true
+    fiter_enable: true
+    # Credentials and topic are fetched from cloud API
+    # API returns: user, password, topic, host (MQTT broker address)
+    http: https://hm.3reality.co/api/hub/v1
+    #http: http://192.168.66.20:8000/api/hub/v1  # Alternative API endpoint
+    # Optional: TLS/SSL configuration
+    # ca: "/path/to/ca.pem"
+    # cert: "/path/to/cert.pem"
+    # key: "/path/to/key.pem"
+
+

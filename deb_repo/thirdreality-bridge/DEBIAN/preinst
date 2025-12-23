@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -e
+
+case "$1" in
+    install|upgrade)
+        if command -v systemctl >/dev/null 2>&1; then
+            if [[ "$(/usr/bin/systemctl is-active linuxbox-hubv3-bridge.service 2>/dev/null || true)" == "active" ]]; then
+                echo "Stopping linuxbox-hubv3-bridge.service"
+                /usr/bin/systemctl stop linuxbox-hubv3-bridge.service || true
+            fi
+        fi
+        ;;
+esac
+

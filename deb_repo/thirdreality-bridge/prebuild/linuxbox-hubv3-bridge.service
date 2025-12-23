@@ -1,0 +1,31 @@
+[Unit]
+Description=LinuxBox HubV3 Bridge - IoT Device Integration Service
+Documentation=https://github.com/thirdreality/hubv3_service
+After=network-online.target
+Wants=network-online.target
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/var/lib/hubv3-bridge
+ExecStart=/usr/local/bin/linuxbox-hubv3-bridge --config /var/lib/hubv3-bridge/configuration.yaml
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=0
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hubv3-bridge
+
+# Graceful shutdown
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+

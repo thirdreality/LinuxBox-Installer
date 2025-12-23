@@ -1,0 +1,14 @@
+Package: thirdreality-bridge
+Version: 0.5.0
+Architecture: arm64
+Depends: libmosquitto1, libcjson1, libyaml-0-2, libcurl4
+Maintainer: guoping.liu <guoping.liu@3reality.com>
+Installed-Size: 1
+Section: utils
+Priority: optional
+Description: LinuxBox Bridge Service
+ This package contains the LinuxBox Bridge service for ThirdReality.
+ It provides bridge functionality for hubv3 devices.
+ .
+ This package is part of the ThirdReality project.
+

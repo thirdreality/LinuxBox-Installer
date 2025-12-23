@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+function info { echo -e "\e[32m[info] $*\e[39m"; }
+function warn  { echo -e "\e[33m[warn] $*\e[39m"; }
+function error { echo -e "\e[31m[error] $*\e[39m"; exit 1; }
+
+# Check install or upgrade
+if [ "$1" = "configure" ]; then
+
+	if [ -f "/usr/local/bin/linuxbox-hubv3-bridge" ]; then
+		chmod +x /usr/local/bin/linuxbox-hubv3-bridge > /dev/null 2>&1
+	fi
+
+	if [ -f "/var/lib/hubv3-bridge/command.sh" ]; then
+		chmod +x /var/lib/hubv3-bridge/command.sh > /dev/null 2>&1
+	fi
+
+    # Reload systemd units before enabling/starting services
+    /usr/bin/systemctl daemon-reload > /dev/null 2>&1
+
+    if [ -f "/lib/systemd/system/linuxbox-hubv3-bridge.service" ]; then
+        /usr/bin/systemctl enable --now linuxbox-hubv3-bridge.service
+    fi
+
+	info "Install success."
+elif [ "$1" = "fix-dependency" ]; then
+    echo "fix-dependency"
+fi
+
+exit 0
+
