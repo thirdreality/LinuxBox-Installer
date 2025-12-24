@@ -7,8 +7,8 @@
       "release": "2025.4.3"
     },
     "hacore": {
-      "version": "2025.10.1",
-      "release": "2025.10.0"
+      "version": "2025.12.0",
+      "release": "2025.12.0"
     },
     "hacore-config": {
       "version": "2025.9.0",
@@ -21,7 +21,11 @@
     "zigbee-mqtt": {
       "version": "2.6.2-rc",
       "release": "2025.10.0"
-    }
+    },
+    "thirdreality-bridge": {
+      "version": "0.6.0",
+      "release": "2025.12.24"
+    }    
   },
   "OpenHab": {
     "version": "2025.5.0"
