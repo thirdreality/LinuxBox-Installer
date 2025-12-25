@@ -1,5 +1,5 @@
 Package: thirdreality-bridge
-Version: 0.9.0
+Version: 0.9.1
 Architecture: arm64
 Depends: libmosquitto1, libcjson1, libyaml-0-2, libcurl4
 Maintainer: guoping.liu <guoping.liu@3reality.com>
