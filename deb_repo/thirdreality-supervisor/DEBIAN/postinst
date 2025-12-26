@@ -59,6 +59,8 @@ if [ "$1" = "configure" ]; then
 				
 				sed -i "s/^VERSION_ID=.*/VERSION_ID=\"${new_version_id}\"/" /etc/t3r-release
 				
+				/usr/bin/sync
+				
 				info "Updated VERSION to ${new_version}"
 				info "Updated VERSION_ID to ${new_version_id}"
 			else
@@ -77,6 +79,7 @@ if [ "$1" = "configure" ]; then
 		if [ -f "/etc/t3r-release" ]; then
 			sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Third Reality Care Hub"/' /etc/t3r-release
 			sed -i 's/^NAME=.*/NAME="LinuxBox\/HubV3"/' /etc/t3r-release
+			/usr/bin/sync
 			info "Updated PRETTY_NAME and NAME in /etc/t3r-release"
 		else
 			warn "/etc/t3r-release file not found, skipping model update"
@@ -86,6 +89,7 @@ if [ "$1" = "configure" ]; then
 		if [ -f "/etc/armbian-release" ]; then
 			sed -i 's/^BOARD=.*/BOARD=trhubv3b/' /etc/armbian-release
 			sed -i 's/^BOARD_NAME=.*/BOARD_NAME="TRHub-V3B"/' /etc/armbian-release
+			/usr/bin/sync
 			info "Updated BOARD and BOARD_NAME in /etc/armbian-release"
 		else
 			warn "/etc/armbian-release file not found, skipping model update"
@@ -117,6 +121,7 @@ if [ "$1" = "configure" ]; then
 		local backup_timestamp=$(date +%Y%m%d_%H%M%S)
 		local backup_file="/opt/zigbee2mqtt/data/configuration_${backup_timestamp}.yaml"
 		cp "$config_file" "$backup_file"
+		/usr/bin/sync
 		info "Backed up configuration to ${backup_file}"
 		
 		# Use Python to modify YAML file
@@ -136,11 +141,6 @@ try:
         'password': 'thirdreality'
     }
     
-    # Update frontend section
-    if 'frontend' not in config:
-        config['frontend'] = {}
-    config['frontend']['enabled'] = True
-    
     with open('$config_file', 'w') as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
     
@@ -150,6 +150,7 @@ except Exception as e:
     sys.exit(1)
 EOF
 		if [ $? -eq 0 ]; then
+			/usr/bin/sync
 			info "Updated zigbee2mqtt configuration successfully"
 		else
 			error "Failed to update zigbee2mqtt configuration"
