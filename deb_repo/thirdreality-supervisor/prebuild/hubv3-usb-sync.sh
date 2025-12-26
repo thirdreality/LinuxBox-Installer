@@ -88,6 +88,7 @@ exclude_patterns=(
     "otbr-agent_"
 
     "zigbee-mqtt_"
+    "thirdreality-bridge_"
 
     "openhab_"
     "music-assistant_"
@@ -109,8 +110,8 @@ update_z2m_quirks_for_debug()
     # Check js file count
     local js_files_count=$(find "$DEBUG_Z2M_DIR" -maxdepth 1 -name "*.js" -type f | wc -l)
 
-    # If js file count is 1 or less, do nothing
-    if [ "$js_files_count" -le 1 ]; then
+    # If js file count is 0, do nothing
+    if [ "$js_files_count" -eq 0 ]; then
         echo 0 >&2
         echo 0
         return 0
@@ -941,6 +942,18 @@ install_zigbee2mqtt_debs() {
     fi
 }
 
+install_thirdreality_bridge_debs() {
+    echo "Attempting to install ThirdReality Bridge debs..."
+
+    bridge_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "thirdreality-bridge_*.deb" -type f | head -n 1)
+    if [ -n "$bridge_deb_file" ]; then
+        install_deb_if_needed "$bridge_deb_file" "thirdreality-bridge"
+        apt-get install -f > /dev/null || true
+    else
+        echo "No thirdreality-bridge deb file found in $WORK_DIR" >&2
+    fi
+}
+
 install_openhab_debs() 
 {
     echo "Attempting to install OpenHAB debs..."
@@ -1280,7 +1293,10 @@ main_procedure()
     install_board_flash_debs
 
     if [ -d "$WORK_DIR" ]; then
-        
+        if [ -e "/usr/local/bin/supervisor" ]; then
+            /usr/local/bin/supervisor led sys_firmware_updating  || true
+        fi
+
         # install home-assistant-core
         is_home_assistant_running=$(systemctl is-active --quiet home-assistant.service && echo "yes" || echo "no")
         hacore_config_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore-config_*.deb" -type f | head -n 1)
@@ -1306,6 +1322,10 @@ main_procedure()
             if [ -n "$zigpy_tools_deb_file" ]; then
                 install_deb_if_needed "$zigpy_tools_deb_file" "thirdreality-zigpy-tools"
             fi        
+        fi
+
+        if [ -e "/usr/local/bin/supervisor" ]; then
+            /usr/local/bin/supervisor led sys_firmware_updating  || true
         fi
 
         # install zigbee2mqtt
@@ -1417,6 +1437,9 @@ main_procedure()
 
         /usr/bin/sync
     fi
+
+    # install thirdreality-bridge
+    install_thirdreality_bridge_debs
 
     # install linux kernel image (must be before other packages, will reboot if updated)
     install_linux_image_deb    

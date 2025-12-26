@@ -9,6 +9,10 @@ case "$1" in
                 echo "Stopping supervisor.service"
                 /usr/bin/systemctl stop supervisor.service || true
             fi
+            if [[ "$(/usr/bin/systemctl is-active btgatt-config.service 2>/dev/null || true)" == "active" ]]; then
+                echo "Stopping btgatt-config.service"
+                /usr/bin/systemctl stop btgatt-config.service || true
+            fi
         fi
         ;;
 esac

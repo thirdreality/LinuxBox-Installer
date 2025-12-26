@@ -51,6 +51,21 @@ APT_AUTO_TIMERS=(
     "apt-daily-upgrade.timer"
 )
 
+
+get_trhub_model() {
+  if [ -f /etc/armbian-release ]; then
+    local board=$(grep "^BOARD=" /etc/armbian-release | cut -d'=' -f2)
+    if [ -n "$board" ]; then
+      echo "$board"
+    else
+      echo "trhubv3"
+    fi
+  else
+    echo "trhubv3"
+  fi
+}
+
+
 function disable_apt_auto_services() {
     print_info "Disabling apt automatic update services"
     for unit in "${APT_AUTO_SERVICES[@]}" "${APT_AUTO_TIMERS[@]}"; do
@@ -154,56 +169,56 @@ function wait_for_dpkg_lock() {
 
 function _remove_otbr_agent()
 {
-    /usr/bin/systemctl stop otbr-web || true
-    /usr/bin/systemctl stop otbr-agent || true
+    /usr/bin/systemctl stop otbr-web > /dev/null 2>&1 || true
+    /usr/bin/systemctl stop otbr-agent > /dev/null 2>&1 || true
 
-    /usr/bin/systemctl disable otbr-web || true
-    /usr/bin/systemctl disable otbr-agent || true
+    /usr/bin/systemctl disable otbr-web > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable otbr-agent > /dev/null 2>&1 || true
 
-    killall otbr-web otbr-agent || true
+    killall otbr-web otbr-agent > /dev/null 2>&1 || true
 
-    /usr/bin/systemctl stop otbr-firewall || true
-    /usr/bin/systemctl disable otbr-firewall || true
+    /usr/bin/systemctl stop otbr-firewall > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable otbr-firewall > /dev/null 2>&1 || true
 
     if [ -f "/usr/sbin/update-rc.d" ]; then
-        /usr/sbin/update-rc.d otbr-firewall remove || true
+        /usr/sbin/update-rc.d otbr-firewall remove > /dev/null 2>&1 || true
     fi
 
-    test ! -f ${FIREWALL_SERVICE} || rm ${FIREWALL_SERVICE} || true
+    test ! -f ${FIREWALL_SERVICE} || rm ${FIREWALL_SERVICE} > /dev/null 2>&1 || true
 
-    test ! -f ${SYSCTL_ACCEPT_RA_FILE} || rm -v ${SYSCTL_ACCEPT_RA_FILE} || true
-    test ! -f ${SYSCTL_IP_FORWARD_FILE} || rm -v ${SYSCTL_IP_FORWARD_FILE} || true
+    test ! -f ${SYSCTL_ACCEPT_RA_FILE} || rm -v ${SYSCTL_ACCEPT_RA_FILE} > /dev/null 2>&1 || true
+    test ! -f ${SYSCTL_IP_FORWARD_FILE} || rm -v ${SYSCTL_IP_FORWARD_FILE} > /dev/null 2>&1 || true
 
     sed -i.bak '/88\s\+openthread/d' /etc/iproute2/rt_tables
 
-    test ! -f /lib/libnss_mdns.so.2 || rm -rf /lib/libnss_mdns.so.2 || true
-    test ! -f /usr/lib/libdns_sd.so || rm -rf /usr/lib/libdns_sd.so || true
+    test ! -f /lib/libnss_mdns.so.2 || rm -rf /lib/libnss_mdns.so.2 > /dev/null 2>&1 || true
+    test ! -f /usr/lib/libdns_sd.so || rm -rf /usr/lib/libdns_sd.so > /dev/null 2>&1 || true
 
     test ! -f /etc/rc2.d/S52mdns || rm -rf /etc/rc2.d/S52mdns || true
-    test ! -f /etc/rc3.d/S52mdns || rm -rf /etc/rc3.d/S52mdns || true
-    test ! -f /etc/rc4.d/S52mdns || rm -rf /etc/rc4.d/S52mdns || true
-    test ! -f /etc/rc5.d/S52mdns || rm -rf /etc/rc5.d/S52mdns || true
-    test ! -f /etc/rc0.d/K16mdns || rm -rf /etc/rc0.d/K16mdns || true
-    test ! -f /etc/rc6.d/K16mdns || rm -rf /etc/rc6.d/K16mdns || true
+    test ! -f /etc/rc3.d/S52mdns || rm -rf /etc/rc3.d/S52mdns > /dev/null 2>&1 || true
+    test ! -f /etc/rc4.d/S52mdns || rm -rf /etc/rc4.d/S52mdns > /dev/null 2>&1 || true
+    test ! -f /etc/rc5.d/S52mdns || rm -rf /etc/rc5.d/S52mdns > /dev/null 2>&1 || true
+    test ! -f /etc/rc0.d/K16mdns || rm -rf /etc/rc0.d/K16mdns > /dev/null 2>&1 || true
+    test ! -f /etc/rc6.d/K16mdns || rm -rf /etc/rc6.d/K16mdns > /dev/null 2>&1 || true
 
-    sysctl -p /etc/sysctl.conf || true
+    sysctl -p /etc/sysctl.conf > /dev/null 2>&1 || true
 }
 
 remove_homeassistant_core()
 {
-    /usr/bin/systemctl stop home-assistant > /dev/null || true
-    /usr/bin/systemctl stop home-assistant > /dev/null || true
+    /usr/bin/systemctl stop home-assistant > /dev/null 2>&1 || true
+    /usr/bin/systemctl stop home-assistant > /dev/null 2>&1 || true
 
-    /usr/bin/systemctl disable matter-server > /dev/null || true
-    /usr/bin/systemctl disable matter-server > /dev/null || true
+    /usr/bin/systemctl disable matter-server > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable matter-server > /dev/null 2>&1|| true
 
-    dpkg --configure -a > /dev/null || true
+    dpkg --configure -a > /dev/null 2>&1 || true
 
-    apt-get purge -y thirdreality-hacore > /dev/null || true
-    apt-get purge -y thirdreality-hacore-config > /dev/null  || true
-    apt-get purge -y thirdreality-python3.13 > /dev/null || true
-    apt-get purge -y thirdreality-python3 > /dev/null || true
-    apt-get purge -y thirdreality-otbr-agent  > /dev/null || true    
+    apt-get purge -y thirdreality-hacore > /dev/null 2>&1 || true
+    apt-get purge -y thirdreality-hacore-config > /dev/null 2>&1 || true
+    apt-get purge -y thirdreality-python3.13 > /dev/null 2>&1 || true
+    apt-get purge -y thirdreality-python3 > /dev/null 2>&1 || true
+    apt-get purge -y thirdreality-otbr-agent  > /dev/null 2>&1 || true    
     #apt-get purge -y thirdreality-zigbee-mqtt  > /dev/null || true
 
     apt-get autoremove -y >/dev/null || true
@@ -214,81 +229,37 @@ remove_homeassistant_core()
 
 remove_zigbee2mqtt()
 {
-    /usr/bin/systemctl stop zigbee2mqtt.service > /dev/null || true
-    /usr/bin/systemctl stop mosquitto.service > /dev/null || true
+    /usr/bin/systemctl stop zigbee2mqtt.service > /dev/null 2>&1|| true
+    /usr/bin/systemctl stop mosquitto.service > /dev/null 2>&1 || true
 
-    /usr/bin/systemctl disable zigbee2mqtt.service > /dev/null || true
-    /usr/bin/systemctl disable mosquitto.service > /dev/null|| true
+    /usr/bin/systemctl disable zigbee2mqtt.service > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable mosquitto.service > /dev/null 2>&1|| true
 
     dpkg --configure -a > /dev/null || true
 
-    local z2m_backup_dir="/opt/z2m_tmp_backup"
-    local data_backed_up=0
-    if [ -d /opt/zigbee2mqtt/data ]; then
-        print_info "Backing up /opt/zigbee2mqtt/data before package removal"
-        rm -rf /opt/zigbee2mqtt/data/log > /dev/null 2>&1 || true
-        rm -rf "${z2m_backup_dir}" > /dev/null 2>&1 || true
-        mkdir -p "${z2m_backup_dir}"
-        cp -a /opt/zigbee2mqtt/data/. "${z2m_backup_dir}"/ >/dev/null 2>&1 || true
-        data_backed_up=1
+    apt-get purge -y thirdreality-zigbee-mqtt > /dev/null 2>&1 || true
+    apt-get purge -y nodejs libsystemd-dev  > /dev/null 2>&1 || true
+    apt-get purge -y mosquitto mosquitto-clients > /dev/null 2>&1 || true
+    apt-get purge -y libmosquitto1 libdlt2 > /dev/null 2>&1 || true
 
-        /usr/bin/sync
-        /usr/bin/sync
-    fi
-
-    apt-get purge -y thirdreality-zigbee-mqtt > /dev/null || true
-    apt-get purge -y nodejs libsystemd-dev  > /dev/null || true
-    apt-get purge -y mosquitto mosquitto-clients > /dev/null || true
-    apt-get purge -y libmosquitto1 libdlt2 > /dev/null || true
-
-    apt-get autoremove -y >/dev/null || true
+    apt-get autoremove -y >/dev/null 2>&1 || true
     systemctl daemon-reload
     userdel mosquitto > /dev/null 2>&1 || true
 
-    if [ "$data_backed_up" -eq 1 ] && [ -d "${z2m_backup_dir}" ]; then
-        print_info "Restoring Zigbee2MQTT data from temporary backup"
-        # Only remove /opt/zigbee2mqtt if it still exists and is not the data directory we want to preserve
-        if [ -d /opt/zigbee2mqtt ]; then
-            # Remove everything except data directory if it exists
-            if [ -d /opt/zigbee2mqtt/data ]; then
-                # Move data out temporarily, remove dir, then restore
-                mv /opt/zigbee2mqtt/data /opt/zigbee2mqtt_data_tmp >/dev/null 2>&1 || true
-            fi
-            rm -rf /opt/zigbee2mqtt > /dev/null 2>&1 || true
-        fi
-        mkdir -p /opt/zigbee2mqtt/data
-        cp -a "${z2m_backup_dir}"/. /opt/zigbee2mqtt/data/ >/dev/null 2>&1 || true
-        # Restore any existing data that was moved out
-        if [ -d /opt/zigbee2mqtt_data_tmp ]; then
-            cp -a /opt/zigbee2mqtt_data_tmp/. /opt/zigbee2mqtt/data/ >/dev/null 2>&1 || true
-            rm -rf /opt/zigbee2mqtt_data_tmp >/dev/null 2>&1 || true
-        fi
-        rm -rf "${z2m_backup_dir}" > /dev/null 2>&1 || true
-
-        /usr/bin/sync
-        /usr/bin/sync
-        
-        # Update configuration if needed
-        update_zigbee2mqtt_config
-    else
-        # Only remove if data was not backed up
-        if [ "$data_backed_up" -eq 0 ]; then
-            rm -rf /opt/zigbee2mqtt > /dev/null 2>&1 || true
-        fi
-    fi
+    rm -rf /opt/zigbee2mqtt > /dev/null 2>&1 || true
 
     rm -rf /etc/mosquitto > /dev/null 2>&1 || true
 }
 
 remove_openhab()
 {
-    /usr/bin/systemctl stop openhab.service > /dev/null || true
-    /usr/bin/systemctl disable openhab.service > /dev/null || true
+    /usr/bin/systemctl stop openhab.service > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable openhab.service > /dev/null 2>&1 || true
 
-    apt-get purge -y openhab* > /dev/null || true
-    apt-get purge -y openjdk-17-jre* > /dev/null || true
+    apt-get purge -y openhab* > /dev/null 2>&1 || true
+    apt-get purge -y openjdk-17-jre* > /dev/null 2>&1 || true
 
-    rm -rf /usr/share/keyrings/openhab.gpg > /dev/null || true
+    rm -rf /usr/share/keyrings/openhab.gpg > /dev/null 2>&1 || true
     rm -rf /etc/apt/sources.list.d/openhab.list > /dev/null || true
     rm -rf /var/log/openhab > /dev/null || true
 
@@ -296,67 +267,85 @@ remove_openhab()
     systemctl daemon-reload
 }
 
-remove_homeassistant_supervised()
-{
-    if [ -f /usr/sbin/hassio-supervisor ]; then    
-        systemctl stop haos-agent > /dev/null 2>&1
-        systemctl stop hassio-apparmor > /dev/null 2>&1
-        systemctl stop hassio-supervisor > /dev/null 2>&1
-        apt-get purge -y homeassistant-supervised\* > /dev/null 2>&1 || true
-        dpkg -r homeassistant-supervised > /dev/null 2>&1 || true
-        dpkg -r os-agent > /dev/null 2>&1 || true
+# remove_homeassistant_supervised()
+# {
+#     if [ -f /usr/sbin/hassio-supervisor ]; then    
+#         systemctl stop haos-agent > /dev/null 2>&1
+#         systemctl stop hassio-apparmor > /dev/null 2>&1
+#         systemctl stop hassio-supervisor > /dev/null 2>&1
+#         apt-get purge -y homeassistant-supervised\* > /dev/null 2>&1 || true
+#         dpkg -r homeassistant-supervised > /dev/null 2>&1 || true
+#         dpkg -r os-agent > /dev/null 2>&1 || true
 
-        dpkg -r thirdreality-hassio-config > /dev/null 2>&1 || true
+#         dpkg -r thirdreality-hassio-config > /dev/null 2>&1 || true
 
-        # Stop and kill containers and images.
-        for repo in "${repositories_to_remove[@]}"; do
-            images=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^$repo" || true)
-            if [ ! -z "$images" ]; then
-                for image in $images; do
-                    containers=$(docker ps -a -q --filter ancestor="$image")
-                    if [ -n "$containers" ]; then
-                        print_info "Stopping containers based on image: $image"
-                        docker stop $containers
-                        docker rm $containers
-                    fi
+#         # Stop and kill containers and images.
+#         for repo in "${repositories_to_remove[@]}"; do
+#             images=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^$repo" || true)
+#             if [ ! -z "$images" ]; then
+#                 for image in $images; do
+#                     containers=$(docker ps -a -q --filter ancestor="$image")
+#                     if [ -n "$containers" ]; then
+#                         print_info "Stopping containers based on image: $image"
+#                         docker stop $containers
+#                         docker rm $containers
+#                     fi
                         
-                    print_info "Removing image: $image"
-                    docker rmi "$image"
-                done
-            fi
-        done
+#                     print_info "Removing image: $image"
+#                     docker rmi "$image"
+#                 done
+#             fi
+#         done
 
-        print_info "Selected containers stopped and images removed successfully."
+#         print_info "Selected containers stopped and images removed successfully."
 
-        sleep 5
-        docker system prune -a -f > /dev/null 2>&1
+#         sleep 5
+#         docker system prune -a -f > /dev/null 2>&1
 
-        if [ -f "/etc/hassio.json" ]; then
-            rm -rf /etc/hassio.json
-        fi
+#         if [ -f "/etc/hassio.json" ]; then
+#             rm -rf /etc/hassio.json
+#         fi
             
-        if [ -e "/var/lib/homeassistant" ]; then
-            rm -rf /var/lib/homeassistant
-        fi
+#         if [ -e "/var/lib/homeassistant" ]; then
+#             rm -rf /var/lib/homeassistant
+#         fi
 
-        if [ -d "/usr/share/hassio" ]; then
-            rm -rf /usr/share/hassio
-        fi
+#         if [ -d "/usr/share/hassio" ]; then
+#             rm -rf /usr/share/hassio
+#         fi
 
-        print_info "Remove old Home Assistant done"
-    else
-        print_error "Home Assistant Supervised is not found."
-    fi
-}
+#         print_info "Remove old Home Assistant done"
+#     else
+#         print_error "Home Assistant Supervised is not found."
+#     fi
+# }
 
-remove_zigpy_tools()
+# remove_zigpy_tools()
+# {
+#     if [ -e "/usr/local/thirdreality/zigpy_tools/bin/activate" ]; then
+#         dpkg -r thirdreality-zigpy-tools > /dev/null 2>&1 || true
+
+#         print_info "Remove old thirdreality zigpy-tools done"
+#     fi
+# }
+
+
+remove_music_assistant()
 {
-    if [ -e "/usr/local/thirdreality/zigpy_tools/bin/activate" ]; then
-        dpkg -r thirdreality-zigpy-tools > /dev/null 2>&1 || true
+    /usr/bin/systemctl stop music-assistant.service > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable music-assistant.service > /dev/null 2>&1 || true
 
-        print_info "Remove old thirdreality zigpy-tools done"
-    fi
+    apt-get purge -y thirdreality-music-assistant > /dev/null 2>&1 || true
 }
+
+remove_linuxbox_bridge()
+{
+    /usr/bin/systemctl stop linuxbox-hubv3-bridge.service > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable linuxbox-hubv3-bridge.service > /dev/null 2>&1 || true
+
+    apt-get purge -y thirdreality-bridge > /dev/null 2>&1 || true
+}
+
 
 restore_serial_tty()
 {
@@ -377,36 +366,6 @@ update_zigbee2mqtt_config()
     
     print_info "Checking Zigbee2MQTT configuration file"
     
-    # Check if mqtt.server contains localhost
-    local has_localhost=0
-    local in_mqtt_section=0
-    
-    while IFS= read -r line; do
-        # Check if we're entering mqtt section
-        if [[ "$line" =~ ^mqtt: ]]; then
-            in_mqtt_section=1
-            continue
-        fi
-        
-        # Check if we're leaving mqtt section (next top-level key without indentation)
-        if [[ $in_mqtt_section -eq 1 ]] && [[ "$line" =~ ^[a-zA-Z_][a-zA-Z0-9_]*: ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
-            break
-        fi
-        
-        # Check for server field in mqtt section
-        if [[ $in_mqtt_section -eq 1 ]] && [[ "$line" =~ ^[[:space:]]+server:[[:space:]]* ]]; then
-            if [[ "$line" =~ localhost ]]; then
-                has_localhost=1
-                break
-            fi
-        fi
-    done < "$config_file"
-    
-    if [ "$has_localhost" -eq 1 ]; then
-        print_info "MQTT server already contains localhost, skipping update"
-        return 0
-    fi
-    
     # Create backup with timestamp
     local timestamp
     timestamp=$(date +%Y%m%d%H%M%S)
@@ -418,111 +377,71 @@ update_zigbee2mqtt_config()
         return 1
     }
     
-    # Update configuration using awk
-    print_info "Updating MQTT configuration to use localhost"
+    # Update frontend.enabled to true using Python
+    print_info "Updating Zigbee2MQTT frontend settings"
     
-    local temp_file
-    temp_file=$(mktemp) || {
-        print_error "Failed to create temporary file"
-        return 1
-    }
+    /usr/bin/python3 << 'PYTHON_EOF'
+import sys
+
+config_file = "/opt/zigbee2mqtt/data/configuration.yaml"
+
+try:
+    # Read the file
+    with open(config_file, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
     
-    awk '
-    BEGIN {
-        in_mqtt = 0
-        mqtt_found = 0
-        base_topic_updated = 0
-        server_updated = 0
-        user_updated = 0
-        password_updated = 0
-    }
-    {
-        # Check if entering mqtt section
-        if (/^mqtt:/) {
-            in_mqtt = 1
-            mqtt_found = 1
-            print
-            next
-        }
+    modified = False
+    result_lines = []
+    in_frontend_section = False
+    
+    for line in lines:
+        stripped = line.lstrip()
         
-        # Check if leaving mqtt section (next top-level key)
-        if (in_mqtt && /^[a-zA-Z_][a-zA-Z0-9_]*:/ && !/^[[:space:]]/) {
-            # Add missing mqtt settings before leaving
-            if (!base_topic_updated) print "  base_topic: zigbee2mqtt"
-            if (!server_updated) print "  server: mqtt://localhost:1883"
-            if (!user_updated) print "  user: thirdreality"
-            if (!password_updated) print "  password: thirdreality"
-            in_mqtt = 0
-            print
-            next
-        }
+        # Check for frontend section
+        if line.strip() == 'frontend:':
+            in_frontend_section = True
+            result_lines.append(line)
+            continue
         
-        # Process lines in mqtt section
-        if (in_mqtt) {
-            if (/^[[:space:]]+base_topic:/) {
-                base_topic_updated = 1
-                print "  base_topic: zigbee2mqtt"
-                next
-            }
-            if (/^[[:space:]]+server:/) {
-                server_updated = 1
-                print "  server: mqtt://localhost:1883"
-                next
-            }
-            if (/^[[:space:]]+user:/) {
-                user_updated = 1
-                print "  user: thirdreality"
-                next
-            }
-            if (/^[[:space:]]+password:/) {
-                password_updated = 1
-                print "  password: thirdreality"
-                next
-            }
-            # Keep other lines in mqtt section (comments, other settings)
-            print
-            next
-        }
+        # Check if we're leaving frontend section (next top-level key without indentation)
+        if in_frontend_section and stripped and not line.startswith(' ') and not line.startswith('\t'):
+            in_frontend_section = False
         
-        # Not in mqtt section, just print
-        print
-    }
-    END {
-        # If mqtt section was at the end, add missing settings
-        if (in_mqtt) {
-            if (!base_topic_updated) print "  base_topic: zigbee2mqtt"
-            if (!server_updated) print "  server: mqtt://localhost:1883"
-            if (!user_updated) print "  user: thirdreality"
-            if (!password_updated) print "  password: thirdreality"
-        } else if (!mqtt_found) {
-            # No mqtt section found, add it at the end
-            print "mqtt:"
-            print "  base_topic: zigbee2mqtt"
-            print "  server: mqtt://localhost:1883"
-            print "  user: thirdreality"
-            print "  password: thirdreality"
-        }
-    }
-    ' "$config_file" > "$temp_file" || {
+        # Process frontend section - only modify enabled field
+        if in_frontend_section and stripped.startswith('enabled:'):
+            # Check current value
+            current_value = stripped.split(':', 1)[1].strip().lower()
+            if current_value == 'false':
+                result_lines.append("  enabled: true\n")
+                modified = True
+            else:
+                result_lines.append(line)
+        else:
+            result_lines.append(line)
+    
+    # Only write back if we actually modified something
+    if modified:
+        with open(config_file, 'w', encoding='utf-8') as f:
+            f.writelines(result_lines)
+        print("Frontend enabled set to true", file=sys.stderr)
+    else:
+        print("Frontend already enabled, no changes needed", file=sys.stderr)
+    
+    sys.exit(0)
+
+except Exception as e:
+    print(f"Error updating configuration: {e}", file=sys.stderr)
+    sys.exit(1)
+PYTHON_EOF
+
+    if [ $? -ne 0 ]; then
         print_error "Failed to update configuration"
-        rm -f "$temp_file"
         if [ -f "$backup_file" ]; then
             print_info "Restoring from backup due to update failure"
             cp "$backup_file" "$config_file" || true
         fi
         return 1
-    }
-    
-    # Replace original file with updated version
-    mv "$temp_file" "$config_file" || {
-        print_error "Failed to replace configuration file"
-        rm -f "$temp_file"
-        if [ -f "$backup_file" ]; then
-            print_info "Restoring from backup due to update failure"
-            cp "$backup_file" "$config_file" || true
-        fi
-        return 1
-    }
+    fi
     
     print_info "Zigbee2MQTT configuration updated successfully"
 }
@@ -533,6 +452,9 @@ if [ -e "/usr/local/bin/supervisor" ]; then
     /usr/local/bin/supervisor led factory_reset
 fi
 
+trhub_model=$(get_trhub_model)
+echo "TRHub model: $trhub_model"
+
 # Stop and disable automatic apt services to avoid lock contention
 disable_apt_auto_services
 
@@ -541,27 +463,44 @@ wait_for_dpkg_lock
 remove_homeassistant_core
 
 # remove zigbee2mqtt
-remove_zigbee2mqtt
+if [ "$trhub_model" == "trhubv3" ]; then
+    remove_zigbee2mqtt
+    remove_linuxbox_bridge
+else
+    /usr/bin/systemctl stop linuxbox-hubv3-bridge.service > /dev/null 2>&1 || true
+    /usr/bin/systemctl stop zigbee2mqtt.service > /dev/null 2>&1 || true
+    update_zigbee2mqtt_config
+fi
+
+/usr/bin/sync
 
 # remove openhab
 remove_openhab
 
-# remove homeassistant supervised
-remove_homeassistant_supervised
+# remove_homeassistant_supervised
+# remove_zigpy_tools
 
-remove_zigpy_tools
+remove_music_assistant
 
 # Query and remove all packages matching "thirdreality", leaving room for future upgrades
-dpkg --list | grep thirdreality | awk '{print $2}' | xargs apt-get remove -y
+if [ "$trhub_model" == "trhubv3" ]; then
+    debs=$(dpkg --list | awk '/^ii/ && $2 ~ /^thirdreality-/{print $2}')
+    if [ -n "$debs" ]; then
+        print_info "Found thirdreality packages: $debs"
+        echo "$debs" | xargs -r apt-get remove -y
+    else
+        print_info "No thirdreality packages found"
+    fi
+fi
 
-rm -rf /usr/share/hassio || true
-rm -rf /var/lib/homeassistant  || true
-rm -rf /var/lib/thread  || true
-rm -rf /lib/thirdreality/conf/*  || true
-rm -rf /lib/thirdreality/backup/*  || true
-rm -rf /lib/thirdreality/archives/* || true
+rm -rf /usr/share/hassio > /dev/null 2>&1 || true
+rm -rf /var/lib/homeassistant > /dev/null 2>&1 || true
+rm -rf /var/lib/thread  > /dev/null 2>&1 || true
+rm -rf /lib/thirdreality/conf/*  > /dev/null 2>&1 || true
+rm -rf /lib/thirdreality/backup/*  > /dev/null 2>&1 || true
+rm -rf /lib/thirdreality/archives/* > /dev/null 2>&1 || true
 
-rm -rf /usr/lib/firmware/bl706/bflb_iot || true
+rm -rf /usr/lib/firmware/bl706/bflb_iot > /dev/null 2>&1 || true
 
 /usr/bin/sync
 

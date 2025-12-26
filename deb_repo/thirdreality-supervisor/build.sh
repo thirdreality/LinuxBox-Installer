@@ -59,8 +59,9 @@ supervised_dir="${current_dir}/LinuxBox_Supervisor"
 
 
 if [ ! -d "${current_dir}/LinuxBox_Supervisor" ]; then
+    print_info "Clone LinuxBox_Supervisor from main branch ..."
     /usr/bin/git --version
-    /usr/bin/git clone git@github.com:thirdreality/LinuxBox_Supervisor.git
+    /usr/bin/git clone git@github.com:thirdreality/LinuxBox_Supervisor.git -b main
 
     current_date=$(date +"%Y%m%d-%H%M")
     print_info "Updating DEVICE_BUILD_NUMBER to ${current_date}"
@@ -68,7 +69,8 @@ if [ ! -d "${current_dir}/LinuxBox_Supervisor" ]; then
 fi
 
 
-if [ -d "supervised_dir" ]; then
+if [ -d "${supervised_dir}" ]; then
+    print_info "Copy supervisor files to output directory ..."
 
     mkdir -p "${output_dir}/usr/local/bin"
     mkdir -p "${output_dir}/usr/local/lib/python3.11/dist-packages"
@@ -88,12 +90,14 @@ if [ -d "supervised_dir" ]; then
 fi
 
 if [ -f "${current_dir}/factory-reset.sh" ]; then
+    print_info "Copy factory-reset.sh to output directory ..."
     mkdir -p "${output_dir}/lib/armbian"
     cp "${current_dir}/factory-reset.sh" "${output_dir}/lib/armbian/"
     chmod +x "${output_dir}/lib/armbian/factory-reset.sh"
 fi
 
 if [ -f "${current_dir}/hubv3-usb-sync.sh" ]; then
+    print_info "Copy hubv3-usb-sync.sh to output directory ..."
     mkdir -p "${output_dir}/lib/thirdreality"
     # rename the file to avoid conflict
     cp "${current_dir}/hubv3-usb-sync.sh" "${output_dir}/lib/thirdreality/hubv3-usb-sync-latest.sh"
