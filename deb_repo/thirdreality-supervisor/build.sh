@@ -89,19 +89,33 @@ if [ -d "${supervised_dir}" ]; then
     cp "${supervised_dir}/btgatt-config.service" "${output_dir}/etc/systemd/system/"
 fi
 
-if [ -f "${current_dir}/factory-reset.sh" ]; then
+if [ -f "${current_dir}/prebuild/factory-reset.sh" ]; then
     print_info "Copy factory-reset.sh to output directory ..."
     mkdir -p "${output_dir}/lib/armbian"
-    cp "${current_dir}/factory-reset.sh" "${output_dir}/lib/armbian/"
+    cp "${current_dir}/prebuild/factory-reset.sh" "${output_dir}/lib/armbian/"
     chmod +x "${output_dir}/lib/armbian/factory-reset.sh"
 fi
 
-if [ -f "${current_dir}/hubv3-usb-sync.sh" ]; then
+if [ -f "${current_dir}/prebuild/hubv3-usb-sync.sh" ]; then
     print_info "Copy hubv3-usb-sync.sh to output directory ..."
     mkdir -p "${output_dir}/lib/thirdreality"
     # rename the file to avoid conflict
-    cp "${current_dir}/hubv3-usb-sync.sh" "${output_dir}/lib/thirdreality/hubv3-usb-sync-latest.sh"
+    cp "${current_dir}/prebuild/hubv3-usb-sync.sh" "${output_dir}/lib/thirdreality/hubv3-usb-sync-latest.sh"
     chmod +x "${output_dir}/lib/thirdreality/hubv3-usb-sync-latest.sh"
+fi
+
+if [ -f "${current_dir}/prebuild/hubv3-generate-ota-indexes.sh" ]; then
+    print_info "Copy hubv3-generate-ota-indexes.sh to output directory ..."
+    mkdir -p "${output_dir}/lib/thirdreality"
+    cp "${current_dir}/prebuild/hubv3-generate-ota-indexes.sh" "${output_dir}/lib/thirdreality/hubv3-generate-ota-indexes.sh"
+    chmod +x "${output_dir}/lib/thirdreality/hubv3-generate-ota-indexes.sh"
+fi
+
+if [ -f "${current_dir}/prebuild/armbian-firstrun" ]; then
+    print_info "Copy armbian-firstrun to output directory ..."
+    mkdir -p "${output_dir}/lib/armbian"
+    cp "${current_dir}/prebuild/armbian-firstrun" "${output_dir}/lib/armbian/"
+    chmod +x "${output_dir}/lib/armbian/armbian-firstrun"
 fi
 
 print_info "Start to build linuxbox-supervisor_${version}.deb ..."

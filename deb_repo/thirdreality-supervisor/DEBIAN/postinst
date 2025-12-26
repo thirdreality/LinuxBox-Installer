@@ -17,8 +17,16 @@ if [ "$1" = "configure" ]; then
 		chmod +x /lib/armbian/factory-reset.sh > /dev/null 2>&1
 	fi
 
+	if [ -f "/lib/armbian/armbian-firstrun" ]; then
+		chmod +x /lib/armbian/armbian-firstrun > /dev/null 2>&1
+	fi
+
 	if [ -f "/lib/thirdreality/hubv3-usb-sync-latest.sh" ]; then
 		chmod +x /lib/thirdreality/hubv3-usb-sync-latest.sh > /dev/null 2>&1
+	fi
+
+	if [ -f "/lib/thirdreality/hubv3-generate-ota-indexes.sh" ]; then
+		chmod +x /lib/thirdreality/hubv3-generate-ota-indexes.sh > /dev/null 2>&1
 	fi
 
 	if [ -f "/usr/local/bin/supervisor" ]; then
