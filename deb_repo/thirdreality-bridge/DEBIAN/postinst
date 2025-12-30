@@ -14,14 +14,12 @@ if [ "$1" = "configure" ]; then
 	# Ensure data dir exists
 	mkdir -p /var/lib/hubv3-bridge > /dev/null 2>&1
 
-	# Handle command.sh: prefer existing user file, otherwise create from default
-	if [ -f "/var/lib/hubv3-bridge/command.sh" ]; then
-		info "Keeping existing command.sh (user may have modified it)"
-		chmod +x /var/lib/hubv3-bridge/command.sh > /dev/null 2>&1
-	elif [ -f "/var/lib/hubv3-bridge/command.sh.default" ]; then
-		info "Creating command.sh from default template"
+	# Handle command.sh: always overwrite from default template
+	if [ -f "/var/lib/hubv3-bridge/command.sh.default" ]; then
+		info "Overwriting command.sh from default template"
 		cp /var/lib/hubv3-bridge/command.sh.default /var/lib/hubv3-bridge/command.sh
 		chmod +x /var/lib/hubv3-bridge/command.sh > /dev/null 2>&1
+		/usr/bin/sync
 	fi
 
 	# Handle configuration.yaml: only create if missing
