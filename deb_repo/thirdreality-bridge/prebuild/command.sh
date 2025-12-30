@@ -50,6 +50,15 @@
 #   - {"command": "switch_host", "param": "https://hm.3reality.co/api/hub/v1"}
 #     Modify configuration file: /var/lib/hubv3-bridge/configuration.yaml
 #     Update sinks.hm_mqtt.http field
+#     After successful update, automatically restart service to apply changes
+#
+#   - {"command": "swupdate", "param": "bridge"}
+#     Execute: supervisor ota bridge > /dev/null 2>&1 &
+#     Execute software update for bridge service in background
+#
+#   - {"command": "swupdate", "param": "z2m"}
+#     Execute: supervisor ota z2m > /dev/null 2>&1 &
+#     Execute software update for z2m service in background
 
 LOG_FILE="/tmp/hubv3_service_command.log"
 CONFIG_FILE="/var/lib/hubv3-bridge/configuration.yaml"
@@ -273,11 +282,40 @@ PYTHON_EOF
     
     if [ $EXIT_CODE -eq 0 ]; then
         echo "[$TIMESTAMP] Configuration updated successfully: http=$PARAM" >> "$LOG_FILE"
+        
+        # Restart service to apply new configuration
+        echo "[$TIMESTAMP] Restarting service to apply new configuration..." >> "$LOG_FILE"
+        systemctl restart linuxbox-hubv3-bridge.service > /dev/null 2>&1 &
+        
+        echo "[$TIMESTAMP] Service restart command executed in background" >> "$LOG_FILE"
     else
         echo "[$TIMESTAMP] Configuration update failed with exit code $EXIT_CODE" >> "$LOG_FILE"
     fi
     
     exit $EXIT_CODE
+fi
+
+# Handle swupdate command
+if [ "$COMMAND" = "swupdate" ]; then
+    if [ -z "$PARAM" ]; then
+        echo "[$TIMESTAMP] Error: swupdate command requires 'param' field (bridge/z2m)" >> "$LOG_FILE"
+        exit 1
+    fi
+    
+    echo "[$TIMESTAMP] Swupdate command detected with param: $PARAM" >> "$LOG_FILE"
+    
+    # Validate param value
+    if [ "$PARAM" != "bridge" ] && [ "$PARAM" != "z2m" ]; then
+        echo "[$TIMESTAMP] Error: swupdate param must be 'bridge' or 'z2m', got: $PARAM" >> "$LOG_FILE"
+        exit 1
+    fi
+    
+    # Execute supervisor ota command in background with output redirection
+    # Execution failure does not affect other operations
+    supervisor ota "$PARAM" > /dev/null 2>&1 &
+    
+    echo "[$TIMESTAMP] Swupdate command executed in background: param=$PARAM" >> "$LOG_FILE"
+    exit 0
 fi
 
 # Handle unknown commands
@@ -292,5 +330,4 @@ if [ -n "$PAYLOAD" ]; then
 fi
 
 exit 0
-
 
