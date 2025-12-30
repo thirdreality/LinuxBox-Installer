@@ -53,6 +53,7 @@ module.exports = [{
             commands: {},
             commandsResponse: {},
         }),
+        m.onOff(),
         m.text({
             name: "location_describe",
             cluster: "genBasic",

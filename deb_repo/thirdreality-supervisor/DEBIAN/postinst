@@ -17,21 +17,28 @@ if [ "$1" = "configure" ]; then
 		chmod +x /lib/armbian/factory-reset.sh > /dev/null 2>&1
 	fi
 
-	if [ -f "/lib/armbian/armbian-firstrun" ]; then
-		chmod +x /lib/armbian/armbian-firstrun > /dev/null 2>&1
+	if [ -f "/lib/thirdreality/armbian-firstrun" ]; then
+		chmod +x /lib/thirdreality/armbian-firstrun > /dev/null 2>&1
+		mv /lib/thirdreality/armbian-firstrun /lib/armbian/armbian-firstrun > /dev/null 2>&1
 	fi
 
 	if [ -f "/lib/thirdreality/hubv3-usb-sync-latest.sh" ]; then
 		chmod +x /lib/thirdreality/hubv3-usb-sync-latest.sh > /dev/null 2>&1
+		mv /lib/thirdreality/hubv3-usb-sync-latest.sh /lib/thirdreality/hubv3-usb-sync.sh > /dev/null 2>&1
 	fi
 
-	if [ -f "/lib/thirdreality/hubv3-generate-ota-indexes.sh" ]; then
-		chmod +x /lib/thirdreality/hubv3-generate-ota-indexes.sh > /dev/null 2>&1
+	if [ -f "/lib/thirdreality/hubv3-generate-ota-indexes-latest.sh" ]; then
+		chmod +x /lib/thirdreality/hubv3-generate-ota-indexes-latest.sh > /dev/null 2>&1
+		mv /lib/thirdreality/hubv3-generate-ota-indexes-latest.sh /lib/thirdreality/hubv3-generate-ota-indexes.sh > /dev/null 2>&1
 	fi
 
 	if [ -f "/usr/local/bin/supervisor" ]; then
 		chmod +x /usr/local/bin/supervisor > /dev/null 2>&1
 	fi
+
+	if [ -f "/usr/local/bin/btgatt-config-server" ]; then
+		chmod +x /usr/local/bin/btgatt-config-server > /dev/null 2>&1
+	fi	
 
     # Reload systemd units before enabling/starting services
     /usr/bin/systemctl daemon-reload > /dev/null 2>&1

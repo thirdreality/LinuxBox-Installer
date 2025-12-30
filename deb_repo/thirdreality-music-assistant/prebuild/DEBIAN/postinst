@@ -185,6 +185,9 @@ show_completion_message() {
         info "Upgrade log: $UPGRADE_LOG"
     fi
     
+    info "If you manually install music-assistant.deb, please execute"
+    info "the following script after installation:"
+    info "/srv/music-assistant/bin/post-fix-music-assistant.sh"
     info "========================================"
     echo ""
 }

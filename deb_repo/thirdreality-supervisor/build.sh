@@ -107,15 +107,15 @@ fi
 if [ -f "${current_dir}/prebuild/hubv3-generate-ota-indexes.sh" ]; then
     print_info "Copy hubv3-generate-ota-indexes.sh to output directory ..."
     mkdir -p "${output_dir}/lib/thirdreality"
-    cp "${current_dir}/prebuild/hubv3-generate-ota-indexes.sh" "${output_dir}/lib/thirdreality/hubv3-generate-ota-indexes.sh"
-    chmod +x "${output_dir}/lib/thirdreality/hubv3-generate-ota-indexes.sh"
+    cp "${current_dir}/prebuild/hubv3-generate-ota-indexes.sh" "${output_dir}/lib/thirdreality/hubv3-generate-ota-indexes-latest.sh"
+    chmod +x "${output_dir}/lib/thirdreality/hubv3-generate-ota-indexes-latest.sh"
 fi
 
 if [ -f "${current_dir}/prebuild/armbian-firstrun" ]; then
     print_info "Copy armbian-firstrun to output directory ..."
-    mkdir -p "${output_dir}/lib/armbian"
-    cp "${current_dir}/prebuild/armbian-firstrun" "${output_dir}/lib/armbian/"
-    chmod +x "${output_dir}/lib/armbian/armbian-firstrun"
+    mkdir -p "${output_dir}/lib/thirdreality"
+    cp "${current_dir}/prebuild/armbian-firstrun" "${output_dir}/lib/thirdreality/"
+    chmod +x "${output_dir}/lib/thirdreality/armbian-firstrun"
 fi
 
 print_info "Start to build linuxbox-supervisor_${version}.deb ..."
