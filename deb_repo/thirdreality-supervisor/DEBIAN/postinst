@@ -5,7 +5,7 @@ function warn  { echo -e "\e[33m[warn] $*\e[39m"; }
 function error { echo -e "\e[31m[error] $*\e[39m"; exit 1; }
 
 # Configurable version number
-armbian_version="20"
+armbian_version="21"
 
 # Board type configuration
 board_type="trhubv3b"
@@ -94,8 +94,9 @@ if [ "$1" = "configure" ]; then
 		if [ -f "/etc/t3r-release" ]; then
 			sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Third Reality Care Hub"/' /etc/t3r-release
 			sed -i 's/^NAME=.*/NAME="LinuxBox\/HubV3"/' /etc/t3r-release
+			sed -i 's/^MODLE=.*/MODLE="3RCH01091H"/' /etc/t3r-release
 			/usr/bin/sync
-			info "Updated PRETTY_NAME and NAME in /etc/t3r-release"
+			info "Updated PRETTY_NAME, NAME and MODLE in /etc/t3r-release"
 		else
 			warn "/etc/t3r-release file not found, skipping model update"
 		fi
