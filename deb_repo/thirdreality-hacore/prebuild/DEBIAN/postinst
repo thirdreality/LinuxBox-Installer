@@ -134,8 +134,23 @@ update_zigbee_config() {
             fi
         fi
     else
-        info "Skipping zigbee config update during upgrade to preserve user data"
-        log_upgrade "Skipped zigbee initialization during upgrade"
+        info "Checking configuration.yaml during upgrade..."
+        
+        # 升级时检查并覆盖 configuration.yaml
+        if [ -f "/var/lib/homeassistant/homeassistant/configuration.yaml" ]; then
+            if [ -f "/srv/homeassistant/bin/config.yaml" ]; then
+                info "Overwriting configuration.yaml from /srv/homeassistant/bin/config.yaml"
+                cp /srv/homeassistant/bin/config.yaml /var/lib/homeassistant/homeassistant/configuration.yaml
+                /usr/bin/sync
+                log_upgrade "Overwritten configuration.yaml from /srv/homeassistant/bin/config.yaml"
+            else
+                info "Skipping zigbee config update during upgrade to preserve user data"
+                log_upgrade "Skipped zigbee initialization during upgrade"
+            fi
+        else
+            info "configuration.yaml not found, skipping"
+            log_upgrade "configuration.yaml not found during upgrade"
+        fi
     fi
 }
 

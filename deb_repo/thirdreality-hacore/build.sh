@@ -358,6 +358,7 @@ if [ -d "${home_assistant_path}/bin" ]; then
     cp ${current_dir}/prebuild/home_assistant_zha_enable.py ${home_assistant_path}/bin/home_assistant_zha_enable.py
     chmod +x ${home_assistant_path}/bin/home_assistant_zha_enable.py
 
+    cp ${current_dir}/prebuild/config_v2026.yaml ${home_assistant_path}/config.yaml
     # z2m 脚本已弃用，不再复制
 fi
 
