@@ -31,13 +31,13 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2025.12.0"
+export HOME_ASSISTANT_VERSION="2026.1.0"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20251203.0" 
+export FRONTEND_VERSION="20260107.0" 
 
-#python-matter-server==8.1.0
-export MATTER_SERVER_VERSION="8.1.1"
+#python-matter-server==8.1.2
+export MATTER_SERVER_VERSION="8.1.2"
 
 version=$(grep '^Version:' ${current_dir}/prebuild/DEBIAN/control | awk '{print $2}')
 print_info "Version: $version"
@@ -184,10 +184,10 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         tqdm==4.67.1 \
         ruff==0.12.1 \
         PyTurboJPEG==1.8.0 \
-        go2rtc-client==0.3.0 \
+        go2rtc-client==0.4.0 \
         ha-ffmpeg==3.2.2 \
         hassil==3.5.0 \
-        home-assistant-intents==2025.12.2 \
+        home-assistant-intents==2026.1.6 \
         mutagen==1.47.0 \
         pymicro-vad==1.0.1 \
         pyspeex-noise==1.0.2
@@ -198,26 +198,26 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${UV_INSTALLED_COMMAND} universal-silabs-flasher==0.1.2 ha-silabs-firmware-client==0.3.0 psutil-home-assistant==0.0.1
     
     # homeassistant.components.matter
-    ${UV_INSTALLED_COMMAND} python-matter-server==8.1.0
+    ${UV_INSTALLED_COMMAND} python-matter-server==8.1.2
 
     # homeassistant.components.thread
     ${UV_INSTALLED_COMMAND} python-otbr-api==2.7.0 pyroute2==0.7.5
 
     # homeassistant.components.zha
-    ${UV_INSTALLED_COMMAND} zha==0.0.80
+    ${UV_INSTALLED_COMMAND} zha==0.0.83
 
     ${UV_INSTALLED_COMMAND} zigpy-cli
 
     #以下是从首次启动日志中获取的，关键字：[homeassistant.util.package]
     ${UV_INSTALLED_COMMAND} ha-ffmpeg==3.2.2
     ${UV_INSTALLED_COMMAND} aiousbwatcher==1.1.1
-    ${UV_INSTALLED_COMMAND} async-upnp-client==0.46.0
+    ${UV_INSTALLED_COMMAND} async-upnp-client==0.46.1
     ${UV_INSTALLED_COMMAND} aiodhcpwatcher==1.2.1
     ${UV_INSTALLED_COMMAND} aiodiscover==2.7.1
     ${UV_INSTALLED_COMMAND} hassil==3.5.0
-    ${UV_INSTALLED_COMMAND} home-assistant-intents==2025.12.2
+    ${UV_INSTALLED_COMMAND} home-assistant-intents==2026.1.6
     ${UV_INSTALLED_COMMAND} mutagen==1.47.0
-    ${UV_INSTALLED_COMMAND} bleak==1.0.1
+    ${UV_INSTALLED_COMMAND} bleak==2.0.0
     ${UV_INSTALLED_COMMAND} bluetooth-adapters==2.1.0
     ${UV_INSTALLED_COMMAND} bluetooth-auto-recovery==1.5.3
     ${UV_INSTALLED_COMMAND} pymicro-vad==1.0.1
@@ -228,26 +228,26 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${UV_INSTALLED_COMMAND} ha-silabs-firmware-client==0.3.0
     ${UV_INSTALLED_COMMAND} gTTS==2.5.3
     ${UV_INSTALLED_COMMAND} av==16.0.1
-    ${UV_INSTALLED_COMMAND} go2rtc-client==0.3.0
+    ${UV_INSTALLED_COMMAND} go2rtc-client==0.4.0
     ${UV_INSTALLED_COMMAND} PyNaCl==1.6.0
-    ${UV_INSTALLED_COMMAND} aioesphomeapi==42.9.0
+    ${UV_INSTALLED_COMMAND} aioesphomeapi==43.9.1
     ${UV_INSTALLED_COMMAND} esphome-dashboard-api==1.3.0
     ${UV_INSTALLED_COMMAND} bleak-esphome==3.4.0
     ${UV_INSTALLED_COMMAND} paho-mqtt==2.1.0
     ${UV_INSTALLED_COMMAND} aioruuvigateway==0.1.0
-    ${UV_INSTALLED_COMMAND} aioshelly==13.22.0
+    ${UV_INSTALLED_COMMAND} aioshelly==13.23.0
     ${UV_INSTALLED_COMMAND} ibeacon-ble==1.2.0
     ${UV_INSTALLED_COMMAND} kegtron-ble==1.0.2
-    ${UV_INSTALLED_COMMAND} xiaomi-ble==1.2.0    
+    ${UV_INSTALLED_COMMAND} xiaomi-ble==1.4.1    
     ${UV_INSTALLED_COMMAND} numpy==2.3.2
     ${UV_INSTALLED_COMMAND} pyotp==2.9.0
     ${UV_INSTALLED_COMMAND} PyQRCode==1.2.1
     ${UV_INSTALLED_COMMAND} pyatv==0.16.1;python_version<'3.14'
-    ${UV_INSTALLED_COMMAND} PySwitchbot==0.74.0
+    ${UV_INSTALLED_COMMAND} PySwitchbot==0.75.0
     ${UV_INSTALLED_COMMAND} cached-ipaddress==1.0.1
     ${UV_INSTALLED_COMMAND} bluetooth-data-tools==1.28.4
     ${UV_INSTALLED_COMMAND} dbus-fast==3.1.2
-    ${UV_INSTALLED_COMMAND} habluetooth==5.7.0
+    ${UV_INSTALLED_COMMAND} habluetooth==5.8.0
     ${UV_INSTALLED_COMMAND} file-read-backwards==2.0.0
 
     #cd ${home_assistant_path}/lib64/python3.13/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev

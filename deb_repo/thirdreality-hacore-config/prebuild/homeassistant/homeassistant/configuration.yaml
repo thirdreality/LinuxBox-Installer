@@ -16,18 +16,31 @@ sensor:
   - platform: websocket_api
 
 recorder:
-  purge_keep_days: 30
+  purge_keep_days: 3 
+  commit_interval: 30
   exclude:
     domains:
       - update
+      - automation
+      - script
+      - scene
+      - group
     entity_globs:
       - sensor.sun*
       - weather.*
+      - sensor.time*
+      - sensor.date*
+      - sensor.uptime*
+      - sensor.load_*
+      - binary_sensor.updater
     entities:
       - sensor.date
-      - sensor.last_boot # Comes from 'systemmonitor' sensor platform
-      - sun.sun # Don't record sun data
+      - sensor.last_boot
+      - sun.sun
     event_types:
-      - call_service # Don't record actions
+      - call_service
 
-#
+logger:
+  default: warning
+  logs:
+    homeassistant.core: info
