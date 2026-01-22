@@ -31,10 +31,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2026.1.0"
+export HOME_ASSISTANT_VERSION="2026.1.1"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20260107.0" 
+export FRONTEND_VERSION="20260107.1" 
 
 #python-matter-server==8.1.2
 export MATTER_SERVER_VERSION="8.1.2"
@@ -201,10 +201,10 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${UV_INSTALLED_COMMAND} python-matter-server==8.1.2
 
     # homeassistant.components.thread
-    ${UV_INSTALLED_COMMAND} python-otbr-api==2.7.0 pyroute2==0.7.5
+    ${UV_INSTALLED_COMMAND} python-otbr-api==2.7.1 pyroute2==0.7.5
 
     # homeassistant.components.zha
-    ${UV_INSTALLED_COMMAND} zha==0.0.83
+    ${UV_INSTALLED_COMMAND} zha==0.0.84
 
     ${UV_INSTALLED_COMMAND} zigpy-cli
 
