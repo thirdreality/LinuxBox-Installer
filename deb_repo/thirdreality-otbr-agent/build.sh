@@ -1,247 +1,275 @@
 #!/bin/bash
+# =============================================================================
+# build.sh - ThirdReality OTBR Agent deb 打包脚本
+#
+# 对应版本: ot-br-posix commit 624a7d98（Thread 1.4, OTBR_MDNS=openthread）
+#
+# 与旧版主要变化:
+#   - 编译方式: setup → bootstrap + cmake-build
+#   - mDNS: 外部 mDNSResponder → 内置，无需 mdnsd/libdns_sd/libnss_mdns
+#   - 删除: otbr-nat44（NAT64 内置）、mdns init.d、dbus conf、nss_mdns.conf
+#   - 删除: otbr-agent-init.sh（ExecStartPre 改为 firewall start）
+#   - CMAKE_INSTALL_PREFIX=/usr → 路径与旧版一致
+# =============================================================================
+
+set -euo pipefail
 
 current_dir=$(pwd)
 output_dir="${current_dir}/output"
 
+COMMIT="624a7d98e0dac5984c2982068f71fc81d2dbceb5"
+SRC_DIR="${current_dir}/ot-br-posix"
+HA_ADDONS_RAW="https://raw.githubusercontent.com/home-assistant/addons/master/openthread_border_router"
+
 REBUILD=false
 CLEAN=false
 
-#Fixed to commit
-#commit_sha1="bb4252342d521736c2cdad0058ce90f54b35c75c"
-commit_sha1="0700948634b85947e893a65e3d510ed870a5755b"
+print_info()  { echo -e "\e[1;34m[BUILD] INFO:\e[0m $1"; }
+print_error() { echo -e "\e[1;31m[BUILD] ERROR:\e[0m $1"; }
+print_step()  { echo -e "\e[1;32m[BUILD] ===== $1 =====\e[0m"; }
 
-SCRIPT="R3"
-print_info() { echo -e "\e[1;34m[${SCRIPT}] INFO:\e[0m $1"; }
-print_error() { echo -e "\e[1;31m[${SCRIPT}] ERROR:\e[0m $1"; }
-
-print_info "Usage: Build.sh [--rebuild] [--clean]"
-print_info "Options:"
-print_info "  --rebuild: Rebuild the env"
-print_info "  --clean: Clean the output directory and remove the env"
+print_info "Usage: build.sh [--rebuild] [--clean]"
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --rebuild) REBUILD=true ;;
-        --clean) CLEAN=true ;;
-        *) print_error "未知参数: $1" >&2; exit 1 ;;
+        --clean)   CLEAN=true ;;
+        *) print_error "未知参数: $1"; exit 1 ;;
     esac
     shift
 done
 
-version=$(grep '^Version:' ${current_dir}/DEBIAN/control | awk '{print $2}')
-print_info "Version: $version"
+version=$(grep '^Version:' "${current_dir}/DEBIAN/control" | awk '{print $2}')
+print_info "Version: ${version}  Commit: ${COMMIT}"
 
-FIREWALL_SERVICE=/etc/init.d/otbr-firewall
-NAT44_SERVICE=/etc/init.d/otbr-nat44
+# =============================================================================
+# --clean: 卸载并清理
+# =============================================================================
+otbr_uninstall() {
+    echo "停止并禁用服务..."
+    for svc in otbr-web otbr-agent otbr-firewall hubv3-otbr-agent; do
+        systemctl stop    "${svc}" 2>/dev/null || true
+        systemctl disable "${svc}" 2>/dev/null || true
+    done
+    killall otbr-web otbr-agent 2>/dev/null || true
 
-SYSCTL_ACCEPT_RA_FILE="/etc/sysctl.d/60-otbr-accept-ra.conf"
-SYSCTL_IP_FORWARD_FILE="/etc/sysctl.d/60-otbr-ip-forward.conf"
+    # 清理 firewall
+    update-rc.d otbr-firewall remove 2>/dev/null || true
+    rm -f /etc/init.d/otbr-firewall
+    rm -f /etc/systemd/system/otbr-agent.service.d/firewall.conf
+    rmdir /etc/systemd/system/otbr-agent.service.d 2>/dev/null || true
 
-otbr_uninstall()
-{
-    echo "Stopping otbr-web/otbr-agent/otbr-firewall services ..."
+    systemctl daemon-reload
 
-    /usr/bin/systemctl stop otbr-web || true
-    /usr/bin/systemctl stop otbr-agent || true
+    # 路由表
+    sed -i.bak '/88[[:space:]]\+openthread/d' /etc/iproute2/rt_tables
 
-    /usr/bin/systemctl disable otbr-web || true
-    /usr/bin/systemctl disable otbr-agent || true
+    # sysctl
+    rm -f /etc/sysctl.d/60-otbr-accept-ra.conf
+    rm -f /etc/sysctl.d/60-otbr-ip-forward.conf
+    sysctl -p /etc/sysctl.conf || true
 
-    killall otbr-web otbr-agent || true
+    # 二进制 & 数据
+    rm -f /usr/sbin/otbr-agent /usr/sbin/otbr-web /usr/sbin/ot-ctl
+    rm -rf /usr/share/otbr-web
+    rm -rf /usr/lib/thirdreality
+    rm -rf /var/lib/thread
 
-    /usr/bin/systemctl stop otbr-firewall || true
-    /usr/bin/systemctl disable otbr-firewall || true
-
-    if [ -f "/usr/sbin/update-rc.d" ]; then
-        /usr/sbin/update-rc.d otbr-firewall remove || true
-    fi
-
-    test ! -f ${FIREWALL_SERVICE} || rm ${FIREWALL_SERVICE}
-
-    systemctl disable otbr-nat44 || true
-    # systemctl disable doesn't remove sym-links
-    if [ -f "/usr/sbin/update-rc.d" ]; then
-        /usr/sbin/update-rc.d otbr-nat44 remove || true
-    fi
-    test ! -f $NAT44_SERVICE || rm $NAT44_SERVICE
-
-    /usr/bin/systemctl daemon-reload
-
-    test ! -f ${SYSCTL_ACCEPT_RA_FILE} || rm -v ${SYSCTL_ACCEPT_RA_FILE}
-    test ! -f ${SYSCTL_IP_FORWARD_FILE} || rm -v ${SYSCTL_IP_FORWARD_FILE}
-
-    echo "Restoring /etc/iproute2/rt_tables ..."
-    sed -i.bak '/88\s\+openthread/d' /etc/iproute2/rt_tables
-
-    echo "Removing file in /usr/lib/ ..."
-    rm -rf /usr/lib/libnss_mdns.so.2 || true
-    rm -rf /usr/lib/libdns_sd.so || true
-    rm -rf /usr/lib/libdns_sd.so.1 || true
-
-    rm -rf /etc/rc2.d/S52mdns 
-	rm -rf /etc/rc2.d/S52mdns
-	rm -rf /etc/rc3.d/S52mdns
-	rm -rf /etc/rc4.d/S52mdns
-	rm -rf /etc/rc5.d/S52mdns
-	rm -rf /etc/rc0.d/K16mdns
-	rm -rf /etc/rc6.d/K16mdns
-
-    echo "Check /etc/sysctl.conf ..."
-    sysctl -p /etc/sysctl.conf
-
-    rm -rf /tmp/mDNSResponder*
-
-    echo "Remove success."
+    echo "清理完成。"
 }
 
-
 if [[ "$CLEAN" == true ]]; then
-    rm -rf "${output_dir}" > /dev/null 2>&1
-    rm -rf ${current_dir}/*.deb > /dev/null 2>&1
-
-    rm -rf "${current_dir}/ot-br-posix"
-
+    rm -rf "${output_dir}" "${current_dir}"/*.deb "${SRC_DIR}"
     otbr_uninstall
-
     exit 0
 fi
 
 if [[ "$REBUILD" == true ]]; then
-    print_info "obtr_agent_${version}.deb rebuilding ..."
-    rm -rf "${output_dir}" > /dev/null 2>&1
-    mkdir -p "${output_dir}"
-
-    rm -rf "${current_dir}/ot-br-posix"
-
-    cp ${current_dir}/DEBIAN ${output_dir}/ -R
+    print_info "重新构建..."
+    rm -rf "${output_dir}" "${SRC_DIR}"
 fi
 
-print_info "Create output directory ..."
+# =============================================================================
+# Step 1: 准备 output 目录结构
+# =============================================================================
+print_step "Step 1: 准备目录"
+
 mkdir -p "${output_dir}"
+rm -rf "${output_dir}/DEBIAN"
+cp -R "${current_dir}/DEBIAN" "${output_dir}/"
 
-print_info "syncing DEBIAN ..."
-rm -rf ${output_dir}/DEBIAN > /dev/null 2>&1
-cp ${current_dir}/DEBIAN ${output_dir}/ -R
+# 目标目录（对应 /usr prefix）
+mkdir -p "${output_dir}/usr/sbin"
+mkdir -p "${output_dir}/usr/share"
+mkdir -p "${output_dir}/usr/lib/systemd/system"
+mkdir -p "${output_dir}/usr/lib/thirdreality"
+mkdir -p "${output_dir}/etc/default"
+mkdir -p "${output_dir}/etc/init.d"
+mkdir -p "${output_dir}/etc/sysctl.d"
+mkdir -p "${output_dir}/etc/modules-load.d"
+mkdir -p "${output_dir}/etc/systemd/system/otbr-agent.service.d"
 
-if [ ! -d "${current_dir}/ot-br-posix" ]; then
-    /usr/bin/git --version
-    /usr/bin/git clone git@github.com:openthread/ot-br-posix.git
+# =============================================================================
+# Step 2: 下载 HA 配置文件
+# =============================================================================
+print_step "Step 2: 下载 HA 附件"
 
-    if [ -n "$commit_sha1" ]; then
-        cd "${current_dir}/ot-br-posix"; git checkout "$commit_sha1"
-    fi
-
-    # OTBR_VENDOR_NAME="Home Assistant" OTBR_PRODUCT_NAME="OpenThread Border Router"
-    cd "${current_dir}/ot-br-posix"; WEB_GUI=0 ./script/bootstrap
-    cd "${current_dir}/ot-br-posix"; INFRA_IF_NAME=wlan0 WEB_GUI=0 ./script/setup
+HA_CONFIG_H="${current_dir}/openthread-core-ha-config-posix.h"
+if [[ ! -f "${HA_CONFIG_H}" ]]; then
+    wget -q -O "${HA_CONFIG_H}" "${HA_ADDONS_RAW}/openthread-core-ha-config-posix.h"
 fi
 
-cd ${current_dir}/ot-br-posix
-dirty_id=$(/usr/bin/git describe --dirty --always)
-print_info "Record dirty-id '$dirty_id'"
-echo "dirty-id: $dirty_id" >> ${output_dir}/DEBIAN/control
+# =============================================================================
+# Step 3: Clone & checkout
+# =============================================================================
+print_step "Step 3: Clone ot-br-posix @ ${COMMIT}"
+
+if [[ ! -d "${SRC_DIR}/.git" ]]; then
+    git clone --depth 1 -b main https://github.com/openthread/ot-br-posix.git "${SRC_DIR}"
+fi
+
+cd "${SRC_DIR}"
+CURRENT=$(git rev-parse HEAD)
+if [[ "${CURRENT}" != "${COMMIT}"* ]]; then
+    git fetch origin "${COMMIT}"
+    git checkout "${COMMIT}"
+fi
+
+git submodule update --init
+
+# 记录 commit 到 control
+dirty_id=$(git describe --dirty --always)
 commit_id=$(git log -1 --format=%H)
-print_info "Record commit-id '$commit_id'"
-echo "commit: $commit_id" >> ${output_dir}/DEBIAN/control
-cd ${current_dir}
+print_info "dirty-id: ${dirty_id}  commit: ${commit_id}"
+echo "dirty-id: ${dirty_id}" >> "${output_dir}/DEBIAN/control"
+echo "commit: ${commit_id}"  >> "${output_dir}/DEBIAN/control"
 
-# find /usr -type f -newermt $(date +'%Y-%m-%d') ! -newermt $(date -d '1 day' +'%Y-%m-%d')
+cd "${current_dir}"
 
-## pure packaging: no writes to system paths here
+# =============================================================================
+# Step 4: Bootstrap（安装编译依赖）
+# =============================================================================
+print_step "Step 4: Bootstrap"
 
-print_info "Copy openthread files ..."
+cd "${SRC_DIR}"
+BORDER_ROUTING=1 BACKBONE_ROUTER=1 PLATFORM=debian RELEASE=1 \
+WEB_GUI=1 REST_API=1 DOCKER=1 OTBR_MDNS=openthread \
+./script/bootstrap
 
-mkdir -p ${output_dir}/etc/default/
-mkdir -p ${output_dir}/etc/init.d/
-mkdir -p ${output_dir}/etc/dbus-1/system.d/
-mkdir -p ${output_dir}/etc/sysctl.d/
+# 删除 libsystemd-dev 避免不必要的链接
+apt-get purge -y libsystemd-dev 2>/dev/null || true
+cd "${current_dir}"
 
-mkdir -p ${output_dir}/usr/sbin/
-mkdir -p ${output_dir}/usr/bin/
-mkdir -p ${output_dir}/usr/lib/systemd/system/
-mkdir -p ${output_dir}/usr/lib/thirdreality/
-mkdir -p ${output_dir}/usr/include/
-mkdir -p ${output_dir}/usr/share
+# =============================================================================
+# Step 5: 复制 HA config.h，cmake-build + ninja install
+# =============================================================================
+print_step "Step 5: cmake-build (PREFIX=/usr)"
 
-if [ -f "/usr/lib/libdns_sd.so.1" ];then 
-    cp /usr/lib/libdns_sd.so.1 ${output_dir}/usr/lib/
-else
-    echo "Error: file /usr/lib/libdns_sd.so.1 is missing!"
-fi
+CONFIG_H_DEST="${SRC_DIR}/third_party/openthread/repo/openthread-core-ha-config-posix.h"
+cp "${HA_CONFIG_H}" "${CONFIG_H_DEST}"
 
-cp ${current_dir}/prebuild/otbr-agent-init.sh ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
-cp ${current_dir}/prebuild/hubv3-otbr-agent.sh ${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh
-cp ${current_dir}/prebuild/otbr_database ${output_dir}/usr/lib/thirdreality/otbr_database
+# beta(1.4) 不需要打 patch
 
-chmod +x ${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh
-chmod +x ${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh
-chmod +x ${output_dir}/usr/lib/thirdreality/otbr_database
+cd "${SRC_DIR}"
+BORDER_ROUTING=1 BACKBONE_ROUTER=1 PLATFORM=debian RELEASE=1 \
+WEB_GUI=1 REST_API=1 DOCKER=1 OTBR_MDNS=openthread \
+./script/cmake-build \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DOTBR_FEATURE_FLAGS=ON \
+    -DOTBR_MDNS=openthread \
+    -DOTBR_VERSION= \
+    -DOT_PACKAGE_VERSION= \
+    -DOTBR_DBUS=OFF \
+    -DOT_POSIX_RCP_HDLC_BUS=ON \
+    "-DOTBR_VENDOR_NAME=Home Assistant" \
+    "-DOTBR_PRODUCT_NAME=OpenThread Border Router" \
+    -DOTBR_WEB=ON \
+    -DOTBR_BORDER_ROUTING=ON \
+    -DOTBR_REST=ON \
+    -DOTBR_BACKBONE_ROUTER=ON \
+    -DOTBR_TREL=ON \
+    -DOTBR_NAT64=ON \
+    "-DOT_POSIX_NAT64_CIDR=192.168.255.0/24" \
+    -DOTBR_DNS_UPSTREAM_QUERY=ON \
+    -DOT_CHANNEL_MONITOR=ON \
+    -DOT_COAP=OFF \
+    -DOT_COAPS=OFF \
+    -DOT_THREAD_VERSION=1.4 \
+    "-DOT_PROJECT_CONFIG=${CONFIG_H_DEST}"
 
-cp /usr/lib/systemd/system/otbr-agent.service ${output_dir}/usr/lib/systemd/system/
-cp ${current_dir}/prebuild/hubv3-otbr-agent.service ${output_dir}/usr/lib/systemd/system/hubv3-otbr-agent.service
+cd "${SRC_DIR}/build/otbr"
+ninja install
 
+cd "${current_dir}"
 
-# 在otbr-agent.service的ExecStartPre=/usr/sbin/service mdns start之前添加ExecStartPre=/usr/lib/thirdreality/otbr-agent-init.sh
-sed -i '/ExecStartPre=\/usr\/sbin\/service mdns start/i ExecStartPre=/usr/lib/thirdreality/otbr-agent-init.sh' ${output_dir}/usr/lib/systemd/system/otbr-agent.service
+# =============================================================================
+# Step 6: 打包文件收集
+# =============================================================================
+print_step "Step 6: 收集文件"
 
-if [ -d "/usr/share/otbr-web" ];then
-    cp -R /usr/share/otbr-web ${output_dir}/usr/share/otbr-web
-fi
+# --- 二进制 ---
+cp /usr/sbin/otbr-agent "${output_dir}/usr/sbin/"
+cp /usr/sbin/otbr-web   "${output_dir}/usr/sbin/"
+cp /usr/sbin/ot-ctl     "${output_dir}/usr/sbin/"
 
-if [ -f "/usr/lib/libnss_mdns-0.2.so" ];then 
-    cp /usr/lib/libnss_mdns-0.2.so ${output_dir}/usr/lib/
-else
-    echo "Error: file /usr/lib/libnss_mdns-0.2.so is missing!"
-fi
+# --- Web 前端静态文件 ---
+cp -R /usr/share/otbr-web "${output_dir}/usr/share/"
 
-if [ -f "/usr/sbin/ot-ctl" ];then 
-    cp /usr/sbin/ot-ctl ${output_dir}/usr/sbin/
-else
-    echo "Error: file /usr/sbin/ot-ctl is missing!"
-    exit 1
-fi
+# --- systemd service 文件（cmake 安装到 /usr/lib/systemd/system/）---
+cp /usr/lib/systemd/system/otbr-agent.service "${output_dir}/usr/lib/systemd/system/"
+cp /usr/lib/systemd/system/otbr-web.service   "${output_dir}/usr/lib/systemd/system/"
 
-# if [ -f "/usr/sbin/mdnsd" ];then 
-#     cp /usr/sbin/mdnsd ${output_dir}/usr/sbin/
-# else
-#     echo "Error: file /usr/sbin/mdnsd is missing!"
-#     exit 1
-# fi
+# --- ThirdReality 专属脚本 ---
+cp "${current_dir}/prebuild/hubv3-otbr-agent.sh"      "${output_dir}/usr/lib/thirdreality/"
+cp "${current_dir}/prebuild/hubv3-otbr-agent.service"  "${output_dir}/usr/lib/systemd/system/"
+cp "${current_dir}/prebuild/otbr_database"             "${output_dir}/usr/lib/thirdreality/"
+chmod +x "${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh"
+chmod +x "${output_dir}/usr/lib/thirdreality/otbr_database"
 
-if [ -f "/usr/sbin/otbr-agent" ];then 
-    cp /usr/sbin/otbr-agent ${output_dir}/usr/sbin/
-else
-    echo "Error: file /usr/sbin/otbr-agent is missing!"
-    exit 1
-fi
+# --- otbr-firewall init.d 脚本 ---
+cp "${SRC_DIR}/script/otbr-firewall" "${output_dir}/etc/init.d/otbr-firewall"
+chmod +x "${output_dir}/etc/init.d/otbr-firewall"
 
+# --- otbr-agent drop-in：ExecStartPre 先建 ipset ---
+cat > "${output_dir}/etc/systemd/system/otbr-agent.service.d/firewall.conf" << 'EOF'
+[Service]
+ExecStartPre=-/etc/init.d/otbr-firewall start
+EOF
 
+# --- env 配置文件（路径与旧版一致：/etc/default/otbr-agent）---
+cp "${current_dir}/prebuild/otbr-agent" "${output_dir}/etc/default/otbr-agent"
 
-cp /usr/bin/dns-sd ${output_dir}/usr/sbin/
-cp /usr/include/dns_sd.h ${output_dir}/usr/include/
+# --- sysctl：开启 IPv6 转发和 RA ---
+cat > "${output_dir}/etc/sysctl.d/60-otbr-ip-forward.conf" << 'EOF'
+net.ipv6.conf.all.forwarding=1
+net.ipv4.ip_forward=1
+net.core.optmem_max=65536
+EOF
 
-cp /etc/dbus-1/system.d/otbr-agent.conf ${output_dir}/etc/dbus-1/system.d/
+cat > "${output_dir}/etc/sysctl.d/60-otbr-accept-ra.conf" << 'EOF'
+net.ipv6.conf.wlan0.accept_ra=2
+net.ipv6.conf.wlan0.accept_ra_rt_info_max_plen=64
+EOF
 
-cp /etc/init.d/otbr-firewall ${output_dir}/etc/init.d/
-cp /etc/init.d/otbr-nat44 ${output_dir}/etc/init.d/
-cp /etc/init.d/mdns ${output_dir}/etc/init.d/
-cp /etc/default/otbr-agent ${output_dir}/etc/default/
-cp /etc/sysctl.d/60-otbr-ip-forward.conf ${output_dir}/etc/sysctl.d
-cp /etc/sysctl.d/60-otbr-accept-ra.conf ${output_dir}/etc/sysctl.d
+# --- 内核模块开机自动加载 ---
+cat > "${output_dir}/etc/modules-load.d/otbr.conf" << 'EOF'
+ip6table_filter
+ip6_tables
+xt_set
+EOF
 
-cp /etc/nss_mdns.conf ${output_dir}/etc/
-#cp /etc/nsswitch.conf.pre-mdns ${output_dir}/etc/
-#cp /etc/nsswitch.conf ${output_dir}/etc/
-# ---------------------
+# =============================================================================
+# Step 7: 列出产出文件
+# =============================================================================
+print_step "Step 7: 产出文件"
+find "${output_dir}" -type f | grep -v "^${output_dir}/DEBIAN" | sort
 
-print_info "Start to build otbr-agent_${version}.deb ..."
-dpkg-deb --build ${output_dir} ${current_dir}/otbr-agent_${version}.deb
+# =============================================================================
+# Step 8: 构建 deb
+# =============================================================================
+print_step "Step 8: dpkg-deb"
 
-# rm -rf ${output_dir}/usr > /dev/null 2>&1
-# rm -rf ${output_dir}/etc > /dev/null 2>&1
-# rm -rf ${output_dir} > /dev/null 2>&1
+dpkg-deb --build "${output_dir}" "${current_dir}/thirdreality-otbr-agent_${version}.deb"
 
-print_info "Build otbr-agent_${version}.deb finished ..."
-
-
-
+print_info "构建完成: thirdreality-otbr-agent_${version}.deb"

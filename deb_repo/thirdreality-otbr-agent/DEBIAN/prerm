@@ -1,56 +1,38 @@
 #!/bin/bash
 set -e
 
-FIREWALL_SERVICE=/etc/init.d/otbr-firewall
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    echo "Stopping OTBR services..."
 
-SYSCTL_ACCEPT_RA_FILE="/etc/sysctl.d/60-otbr-accept-ra.conf"
-SYSCTL_IP_FORWARD_FILE="/etc/sysctl.d/60-otbr-ip-forward.conf"
+    for svc in otbr-web otbr-agent otbr-firewall hubv3-otbr-agent; do
+        systemctl stop    "${svc}" 2>/dev/null || true
+        systemctl disable "${svc}" 2>/dev/null || true
+    done
 
-# 停止服务
-if [ "$1" = "remove" ]; then
-    echo "Stopping otbr-web/otbr-agent/otbr-firewall services ..."
+    killall otbr-web otbr-agent 2>/dev/null || true
 
-    /usr/bin/systemctl stop otbr-web || true
-    /usr/bin/systemctl stop otbr-agent || true
+    # 清理 firewall ipset & iptables
+    /etc/init.d/otbr-firewall stop 2>/dev/null || true
+    update-rc.d otbr-firewall remove 2>/dev/null || true
 
-    /usr/bin/systemctl disable otbr-web || true
-    /usr/bin/systemctl disable otbr-agent || true
+    # 清理 drop-in
+    rm -f /etc/systemd/system/otbr-agent.service.d/firewall.conf
+    rmdir /etc/systemd/system/otbr-agent.service.d 2>/dev/null || true
 
-    killall otbr-web otbr-agent || true
+    systemctl daemon-reload
 
-    /usr/bin/systemctl stop otbr-firewall || true
-    /usr/bin/systemctl disable otbr-firewall || true
+    # 路由表
+    sed -i.bak '/88[[:space:]]\+openthread/d' /etc/iproute2/rt_tables
 
-    if [ -f "/usr/sbin/update-rc.d" ]; then
-        /usr/sbin/update-rc.d otbr-firewall remove || true
-    fi
+    # sysctl
+    rm -f /etc/sysctl.d/60-otbr-accept-ra.conf
+    rm -f /etc/sysctl.d/60-otbr-ip-forward.conf
+    sysctl -p /etc/sysctl.conf || true
 
-    /usr/bin/systemctl daemon-reload
-
-    test ! -f ${FIREWALL_SERVICE} || rm ${FIREWALL_SERVICE}
-
-    test ! -f ${SYSCTL_ACCEPT_RA_FILE} || rm -v ${SYSCTL_ACCEPT_RA_FILE}
-    test ! -f ${SYSCTL_IP_FORWARD_FILE} || rm -v ${SYSCTL_IP_FORWARD_FILE}
-
-    echo "Restoring /etc/iproute2/rt_tables ..."
-    sed -i.bak '/88\s\+openthread/d' /etc/iproute2/rt_tables
-
-    rm -rf /lib/libnss_mdns.so.2
-    rm -rf /usr/lib/libdns_sd.so
-
-    rm -rf /etc/rc2.d/S52mdns 
-	rm -rf /etc/rc2.d/S52mdns
-	rm -rf /etc/rc3.d/S52mdns
-	rm -rf /etc/rc4.d/S52mdns
-	rm -rf /etc/rc5.d/S52mdns
-	rm -rf /etc/rc0.d/K16mdns
-	rm -rf /etc/rc6.d/K16mdns
-
-    sysctl -p /etc/sysctl.conf
-
+    # thread 数据
     rm -rf /var/lib/thread
 
-    echo "Remove success."
+    echo "Remove OTBR-Agent success."
 fi
 
 exit 0

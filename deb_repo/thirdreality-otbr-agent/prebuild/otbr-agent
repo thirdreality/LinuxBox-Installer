@@ -1,5 +1,8 @@
-# Default settings for otbr-agent/ThirdReality LinuxBox dev verion. This file is sourced by systemd
-
-# Options to pass to otbr-agent
-OTBR_AGENT_OPTS="-I wpan0 -B wlan0 -d 5 spinel+hdlc+uart:///dev/ttyAML6?uart-baudrate=115200 trel://wlan0"
+# otbr-agent 启动参数
+# -I: Thread 虚拟网口（固定 wpan0）
+# -B: 骨干网口（无线网卡）
+# -d: 日志级别（5=NOTICE）
+# --rest-listen-address: REST API 监听地址（0.0.0.0 允许外部访问）
+# --rest-listen-port:    REST API 端口（默认 8081）
+OTBR_AGENT_OPTS="-I wpan0 -B wlan0 -d 5 --rest-listen-address 0.0.0.0 --rest-listen-port 8081 spinel+hdlc+uart:///dev/ttyAML6?uart-baudrate=115200 trel://wlan0"
 OTBR_NO_AUTO_ATTACH=0

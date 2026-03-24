@@ -1,45 +1,20 @@
 #!/bin/bash
+# 安装/升级前：停止旧服务
 
-if [[ "$(/usr/bin/systemctl is-active otbr-web)" == "active" ]]; then
-    echo "Stopping otbr-web"
-    /usr/bin/systemctl stop otbr-web
-    /usr/bin/systemctl disable otbr-web
-fi
+for svc in otbr-web otbr-agent otbr-firewall hubv3-otbr-agent; do
+    if systemctl is-active --quiet "${svc}" 2>/dev/null; then
+        echo "Stopping ${svc}..."
+        systemctl stop    "${svc}" || true
+        systemctl disable "${svc}" || true
+    fi
+done
 
-if [[ "$(/usr/bin/systemctl is-active otbr-agent)" == "active" ]]; then
-    echo "Stopping otbr-agent"
-    /usr/bin/systemctl stop otbr-agent
-    /usr/bin/systemctl disable otbr-agent
-fi
+# 升级时清理旧版 mDNSResponder 遗留文件（旧版才有）
+rm -f /usr/sbin/mdnsd /usr/bin/dns-sd
+rm -f /usr/lib/libdns_sd.so /usr/lib/libdns_sd.so.1
+rm -f /usr/lib/libnss_mdns-0.2.so /usr/lib/libnss_mdns.so.2
+rm -f /lib/libnss_mdns-0.2.so /lib/libnss_mdns.so.2
+rm -f /etc/init.d/mdns /etc/init.d/otbr-nat44
+rm -f /etc/rc?.d/*mdns /etc/rc?.d/*nat44 2>/dev/null || true
 
-if [[ "$(/usr/bin/systemctl is-active otbr-firewall)" == "active" ]]; then
-    echo "Stopping otbr-firewall"
-    /usr/bin/systemctl stop otbr-firewall
-    /usr/bin/systemctl disable otbr-firewall
-fi
-
-if [[ "$(/usr/bin/systemctl is-active otbr-agent)" == "active" ]]; then
-    echo "Stopping otbr-agent"
-    /usr/bin/systemctl stop otbr-agent
-    /usr/bin/systemctl disable otbr-agent
-fi
-
-if [[ "$(/usr/bin/systemctl is-active hubv3-otbr-agent)" == "active" ]]; then
-    echo "Stopping hubv3-otbr-agent"
-    /usr/bin/systemctl stop hubv3-otbr-agent
-    /usr/bin/systemctl disable hubv3-otbr-agent
-fi
-
-
-
-/usr/bin/systemctl daemon-reload
-
-#sudo apt-get install --no-install-recommends -y wget iproute2 iputils-ping libreadline-dev libncurses-dev
-#sudo apt-get install --no-install-recommends -y build-essential ninja-build cmake
-#sudo apt-get install --no-install-recommends -y rsyslog
-#sudo apt-get install --no-install-recommends -y dbus libdbus-1-dev
-#sudo apt-get install --no-install-recommends -y libavahi-client3 libavahi-common-dev libavahi-client-dev
-#sudo apt-get install --no-install-recommends -y libjsoncpp-dev
-#sudo apt-get install --no-install-recommends -y libnetfilter-queue1 libnetfilter-queue-dev
-#sudo apt-get install -y iptables ipset
-#sudo apt-get install -y libprotobuf-dev protobuf-compiler
+systemctl daemon-reload

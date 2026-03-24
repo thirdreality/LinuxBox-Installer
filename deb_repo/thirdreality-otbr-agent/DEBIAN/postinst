@@ -1,205 +1,119 @@
 #!/bin/bash
 set -e
 
-INFRA_IF_NAME="wlan0"
-readonly INFRA_IF_NAME
+INFRA_IF="wlan0"
 
-SYSCTL_ACCEPT_RA_FILE="/etc/sysctl.d/60-otbr-accept-ra.conf"
-readonly SYSCTL_ACCEPT_RA_FILE
-
-SYSCTL_IP_FORWARD_FILE="/etc/sysctl.d/60-otbr-ip-forward.conf"
-readonly SYSCTL_IP_FORWARD_FILE
-
-accept_ra_enable()
-{
-    echo 2 | tee /proc/sys/net/ipv6/conf/"${INFRA_IF_NAME}"/accept_ra || die 'Failed to enable IPv6 RA!'
-    echo 64 | tee /proc/sys/net/ipv6/conf/"${INFRA_IF_NAME}"/accept_ra_rt_info_max_plen || die 'Failed to enable IPv6 RIO!'
+accept_ra_enable() {
+    echo 2 > /proc/sys/net/ipv6/conf/${INFRA_IF}/accept_ra || true
+    echo 64 > /proc/sys/net/ipv6/conf/${INFRA_IF}/accept_ra_rt_info_max_plen || true
 }
 
-ipforward_enable()
-{
-    echo 1 | tee /proc/sys/net/ipv6/conf/all/forwarding || die 'Failed to enable IPv6 forwarding!'
-    echo 1 | tee /proc/sys/net/ipv4/ip_forward || die 'Failed to enable IPv4 forwarding!'
+ipforward_enable() {
+    echo 1 > /proc/sys/net/ipv6/conf/all/forwarding || true
+    echo 1 > /proc/sys/net/ipv4/ip_forward || true
 }
 
-#/etc/sysctl.conf
-#/etc/iproute2/rt_tables
-rt_tables_install()
-{
-    sed -i.bak '/88\s\+openthread/d' /etc/iproute2/rt_tables
+rt_tables_install() {
+    # 去重后添加
+    sed -i.bak '/88[[:space:]]\+openthread/d' /etc/iproute2/rt_tables
+    echo "88 openthread" >> /etc/iproute2/rt_tables
 
-    echo "88 openthread" >>/etc/iproute2/rt_tables
-
-    echo "" >>/etc/sysctl.conf
-    echo "# OpenThread configuration" >>/etc/sysctl.conf
-    echo "net.core.optmem_max=65536" >>/etc/sysctl.conf
-    sysctl -p /etc/sysctl.conf
+    # optmem_max（只添加一次）
+    if ! grep -q "optmem_max" /etc/sysctl.conf 2>/dev/null; then
+        echo "" >> /etc/sysctl.conf
+        echo "# OpenThread configuration" >> /etc/sysctl.conf
+        echo "net.core.optmem_max=65536" >> /etc/sysctl.conf
+    fi
+    sysctl -p /etc/sysctl.conf || true
 }
 
 add_open_thread_entry_to_config() {
-	echo "Checking if Thread Border Router API is available..."
-	local max_attempts=5
-	local attempt=1
-	local success=false
+    echo "Checking if Thread Border Router API is available..."
+    local max_attempts=5
+    local attempt=1
 
-	while [ $attempt -le $max_attempts ] && [ "$success" = "false" ]; do
-		echo "Attempt $attempt of $max_attempts"
-		
-		# Check if the Thread Border Router API returns data
-		response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/node 2>/dev/null)
-		
-		if [ "$response" = "200" ]; then
-			echo "Thread Border Router API is available and returning data"
-			/usr/lib/thirdreality/otbr_database || true
-			success=true
-		elif [ "$response" = "204" ]; then
-			echo "Thread Border Router API is available but no data returned"
-			/usr/lib/thirdreality/otbr_database || true
-			success=true
-		else
-			echo "Thread Border Router API not available (HTTP code: $response), waiting..."
-			sleep 1
-			attempt=$((attempt + 1))
-		fi
-	done
-
-	if [ "$success" = "false" ]; then
-		echo "Failed to connect to Thread Border Router API after $max_attempts attempts"
-		return 1
-	fi
+    while [ $attempt -le $max_attempts ]; do
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/node 2>/dev/null || echo "0")
+        if [ "$response" = "200" ] || [ "$response" = "204" ]; then
+            echo "Thread API available (HTTP ${response})"
+            /usr/lib/thirdreality/otbr_database || true
+            return 0
+        fi
+        echo "Thread API not ready (HTTP ${response}), waiting... (${attempt}/${max_attempts})"
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    echo "Thread API unavailable after ${max_attempts} attempts, skipping."
+    return 0
 }
 
-# 检查是安装还是升级
 if [ "$1" = "configure" ]; then
-	
-	mkdir -p /var/lib/thread
 
-	if [ -f "/usr/lib/libdns_sd.so.1" ]; then
-		ln -s -f /usr/lib/libdns_sd.so.1 /usr/lib/libdns_sd.so
-	fi 
-	
-	if [ -f "/lib/libnss_mdns-0.2.so" ]	; then
-		chmod 444 /lib/libnss_mdns-0.2.so
-		ln -s -f /lib/libnss_mdns-0.2.so /lib/libnss_mdns.so.2
-	fi
+    mkdir -p /var/lib/thread
 
-	if [ -f "/etc/init.d/mdns" ]; then
-		chmod ugo+x /etc/init.d/mdns
-		ln -s -f /etc/init.d/mdns /etc/rc2.d/S52mdns
-		ln -s -f /etc/init.d/mdns /etc/rc3.d/S52mdns
-		ln -s -f /etc/init.d/mdns /etc/rc4.d/S52mdns
-		ln -s -f /etc/init.d/mdns /etc/rc5.d/S52mdns
-		ln -s -f /etc/init.d/mdns /etc/rc0.d/K16mdns
-		ln -s -f /etc/init.d/mdns /etc/rc6.d/K16mdns
-	fi
-
-	if [ -f "/etc/nss_mdns.conf" ]; then
-		chmod 444 /etc/nss_mdns.conf
-	fi
-	
-	if [ -f "/etc/init.d/otbr-firewall" ]; then
-		chmod a+x /etc/init.d/otbr-firewall
-		/usr/bin/systemctl enable otbr-firewall
-		/usr/bin/systemctl start otbr-firewall
-	fi
-
-	if [ -f "/etc/init.d/otbr-nat44" ]; then
-		chmod a+x /etc/init.d/otbr-nat44
-		/usr/bin/systemctl enable otbr-nat44
-		/usr/bin/systemctl start otbr-nat44
-	fi
-
-
-	# accept_ra_install
+    # --- sysctl & 路由表 ---
     accept_ra_enable
-
-	# ipforward_install
     ipforward_enable
+    rt_tables_install
 
-	rt_tables_install
+    # --- 内核模块 ---
+    modprobe ip6table_filter || true
+    modprobe ip6_tables      || true
+    modprobe xt_set          || true
 
-	chmod +x /usr/lib/thirdreality/hubv3-otbr-agent.sh || true
-	chmod +x /usr/lib/thirdreality/otbr-agent-init.sh || true
-	chmod +x /usr/lib/thirdreality/otbr_database || true
+    # --- 脚本权限 ---
+    chmod +x /usr/lib/thirdreality/hubv3-otbr-agent.sh || true
+    chmod +x /usr/lib/thirdreality/otbr_database       || true
+    chmod +x /etc/init.d/otbr-firewall
 
-	/usr/bin/systemctl disable hubv3-otbr-agent.service  || true
-	/usr/bin/systemctl enable otbr-agent.service  || true
-	/usr/bin/systemctl reload dbus
-	/usr/bin/systemctl daemon-reload
+    # --- 注册 otbr-firewall（兜底，ExecStartPre 是主路径）---
+    update-rc.d otbr-firewall defaults || true
 
+    # --- 启动 firewall，创建 ipset ---
+    /etc/init.d/otbr-firewall start || true
 
-	# 这里检查U盘中是否存在备份文件:
-	SKIP_AUTO_CONFIGRATION=false
-	if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
-		BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
-		if [ "$BACKUP_FILES" -gt 0 ]; then
-			echo "[INFO] Found $BACKUP_FILES backup setting files in /mnt/R3Backup/ with .enable-restore flag, skipping channel change operation"
-			SKIP_AUTO_CONFIGRATION=true
-		fi
-	fi
+    # --- systemd ---
+    systemctl daemon-reload
+    systemctl enable otbr-agent.service  || true
+    systemctl enable otbr-web.service    || true
 
-	if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
-		/usr/bin/systemctl start otbr-agent.service || true
-	fi
-		
-	if [ -e "/usr/local/bin/supervisor" ]; then
-		/usr/local/bin/supervisor thread enabled || true
-	fi
+    # 检查是否有备份恢复流程，有则跳过自动启动
+    SKIP_AUTO_CONFIG=false
+    if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
+        BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
+        if [ "$BACKUP_FILES" -gt 0 ]; then
+            echo "[INFO] Found backup files, skipping auto-configuration."
+            SKIP_AUTO_CONFIG=true
+        fi
+    fi
 
-	if [ "$SKIP_AUTO_CONFIGRATION" = "false" ]; then
-		# 如果Home Assistant正在运行，需要停止服务，然后更新配置，再恢复服务
-		if [[ "$(/usr/bin/systemctl is-active home-assistant.service)" == "active" ]]; then
-			echo "Stopping home-assistant.service"
-			/usr/bin/systemctl stop home-assistant.service
+    if [ "$SKIP_AUTO_CONFIG" = "false" ]; then
+        systemctl start otbr-agent.service || true
+        systemctl start otbr-web.service   || true
 
-			sync
-			add_open_thread_entry_to_config
-			sync
+        if [ -e "/usr/local/bin/supervisor" ]; then
+            /usr/local/bin/supervisor thread enabled || true
+        fi
 
-			echo "Restore home-assistant.service"
-			/usr/bin/systemctl start home-assistant.service
-		else
-			echo "Skipping home-assistant.service"
-			add_open_thread_entry_to_config
-			sync
-		fi	
-	fi
-	# # 检查 GPIO pin 0, 27 的状态
-    # if gpioget 0 27; then
-	# 	echo "Info: Thread Device is found."
+        # 写入 HA 配置
+        if systemctl is-active --quiet home-assistant.service; then
+            echo "Stopping home-assistant.service..."
+            systemctl stop home-assistant.service
+            sync
+            add_open_thread_entry_to_config
+            sync
+            echo "Restoring home-assistant.service..."
+            systemctl start home-assistant.service
+        else
+            add_open_thread_entry_to_config
+            sync
+        fi
+    fi
 
-	# 	msg=$(iw dev wlan0 link 2>&1)
-	# 	/usr/bin/systemctl start otbr-agent || true
-		
-	# 	if [ -e "/usr/local/bin/supervisor" ]; then
-	# 		/usr/local/bin/supervisor thread enabled || true
-	# 	fi
+    echo "Install OTBR-Agent success."
 
-	# 	# 如果Home Assistant正在运行，需要停止服务，然后更新配置，再恢复服务
-	# 	if [[ "$(/usr/bin/systemctl is-active home-assistant.service)" == "active" ]]; then
-	# 		echo "Stopping home-assistant.service"
-	# 		/usr/bin/systemctl stop home-assistant.service
-
-	# 		sync
-	# 		add_open_thread_entry_to_config
-	# 		sync
-
-	# 		echo "Restore home-assistant.service"
-	# 		/usr/bin/systemctl start home-assistant.service
-	# 	else
-	# 		echo "Skipping home-assistant.service"
-	# 		add_open_thread_entry_to_config
-	# 		sync
-	# 	fi		
-    # else
-	# 	echo "Warning: Thread Device is not found !!!"
-    #     /usr/bin/systemctl stop otbr-agent || true
-    # fi
-
-	echo "Install OTBR-Agent success."
 elif [ "$1" = "fix-dependency" ]; then
     echo "fix-dependency"
 fi
 
 exit 0
-
