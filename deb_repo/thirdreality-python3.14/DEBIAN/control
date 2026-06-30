@@ -1,0 +1,8 @@
+Package: thirdreality-python3
+Version: 3.14.5
+Section: utils
+Priority: optional
+Architecture: arm64
+Maintainer: guoping.liu <guoping.liu@3reality.com>
+Description: A custom python3.14 package by thirdreality-python3.14 for ThirdReality LinuxBox Dev Edition.
+ A longer description of the package.for ThirdReality LinuxBox Dev Edition.

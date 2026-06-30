@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+
+PY_DIR="/usr/local/python3"
+BIN_DIR="/usr/local/bin"
+
+# Detect install or upgrade
+case "$1" in
+    configure)
+        echo "Configure python3.14 ThirdReality"
+
+        # # Create/update symlinks pointing to the current version
+        # if [ -x "${PY_DIR}/bin/python3.14" ]; then
+        #     ln -snf "${PY_DIR}/bin/python3.14" "${BIN_DIR}/python3"
+        #     ln -snf "${PY_DIR}/bin/python3.14" "${BIN_DIR}/python"
+        # fi
+
+        # if [ -x "${PY_DIR}/bin/pip3.14" ]; then
+        #     ln -snf "${PY_DIR}/bin/pip3.14" "${BIN_DIR}/pip3"
+        #     ln -snf "${PY_DIR}/bin/pip3.14" "${BIN_DIR}/pip"
+        # fi
+        
+        # if [ -x "${PY_DIR}/bin/python3.14-config" ]; then
+        #     ln -snf "${PY_DIR}/bin/python3.14-config" "${BIN_DIR}/python3-config"
+        # fi
+
+        hash -r || true
+        ;;
+    fix-dependency)
+        echo "fix-dependency"
+        ;;
+esac
+
+exit 0

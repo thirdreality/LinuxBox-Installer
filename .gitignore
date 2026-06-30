@@ -1,0 +1,8 @@
+# Build artifacts
+deb_repo/*/output/
+deb_repo/*/*.deb
+deb_repo/*/build.log
+
+# Downloaded / extracted Python sources
+deb_repo/thirdreality-python3*/Python-*.tgz
+deb_repo/thirdreality-python3*/Python-*/
