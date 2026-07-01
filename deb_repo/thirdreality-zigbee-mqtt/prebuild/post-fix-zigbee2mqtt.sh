@@ -23,6 +23,14 @@ log() {
 
 
 install_mosquitto_packages() {
+    # If mosquitto is already installed (e.g. pre-baked into the system image),
+    # do NOT force-install or upgrade the bundled version. We only (re)configure
+    # the username/password and conf later in configure_mosquitto().
+    if dpkg-query -W -f='${Status}' mosquitto 2>/dev/null | grep -q "install ok installed"; then
+        log "mosquitto already installed (version $(dpkg-query -W -f='${Version}' mosquitto 2>/dev/null)), skipping package install; will only configure credentials/config"
+        return 0
+    fi
+
     local MOS_PACKAGES=("libdlt2_*.deb" "libmosquitto1_*.deb" "mosquitto-clients_*.deb" "mosquitto_*.deb")
     for pkg in "${MOS_PACKAGES[@]}"; do
         local pkg_files=(${DEFAULT_APT_CACHE}/${pkg})
@@ -80,6 +88,13 @@ install_nodejs() {
         local cur_ver=$(dpkg-query -W -f='${Version}' nodejs 2>/dev/null)
         log "=== Starting nodejs installation/upgrade ==="
         log "nodejs target version: $new_ver, installed version: $cur_ver"
+
+        # Version policy: standardize on the Node.js v24.x major line.
+        # - Not installed          -> install bundled v24.x
+        # - Installed major >= 24   -> keep as-is (do NOT force patch/minor upgrades)
+        # - Installed major  < 24   -> upgrade to bundled v24.x (e.g. v22.x -> v24.x)
+        local cur_major=$(echo "$cur_ver" | grep -oE '^[0-9]+')
+        local new_major=$(echo "$new_ver" | grep -oE '^[0-9]+')
         
         # Check service status before upgrade
         if systemctl is-active --quiet zigbee2mqtt.service 2>/dev/null; then
@@ -95,8 +110,10 @@ install_nodejs() {
                 return 1
             }
             log "nodejs installed successfully"
-        elif dpkg --compare-versions "$cur_ver" lt "$new_ver"; then
-            log "Upgrading nodejs from $cur_ver to $new_ver"
+        elif [ -n "$cur_major" ] && [ "$cur_major" -ge "$new_major" ]; then
+            log "nodejs already on v${cur_major}.x line (installed $cur_ver, target major v${new_major}.x), keeping existing version (no forced upgrade)"
+        elif [ -n "$cur_major" ] && [ "$cur_major" -lt "$new_major" ]; then
+            log "Upgrading nodejs from $cur_ver to $new_ver (installed major v${cur_major} < target v${new_major})"
             
             # Check and kill node processes before removal
             check_and_kill_node_processes

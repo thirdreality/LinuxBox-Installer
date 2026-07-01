@@ -105,7 +105,7 @@ cp ${current_dir}/DEBIAN ${output_dir}/ -R
 if ! dpkg -l | grep -q "mosquitto " || ! dpkg -l | grep -q "mosquitto-clients"; then
     print_info "Installing mosquitto and mosquitto-clients..."
     apt update
-    apt-get install --download-only mosquitto mosquitto-clients libdlt2 libmosquitto1 
+    apt-get install -y --download-only mosquitto mosquitto-clients libdlt2 libmosquitto1 
     apt install -y mosquitto mosquitto-clients
     systemctl disable mosquitto.service
     systemctl stop mosquitto.service
@@ -133,9 +133,11 @@ cp ${current_dir}/prebuild/mosquitto.conf /etc/mosquitto/mosquitto.conf
 systemctl start mosquitto.service
 
 if ! dpkg -l | grep -q "nodejs "; then
-    print_info "Installing nodejs..."
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-    apt-get install --download-only nodejs libsystemd-dev
+    print_info "Installing nodejs (pinned to v24.x)..."
+    # Pin to Node.js v24.x major line (NodeSource) instead of tracking latest LTS,
+    # to avoid unwanted major-version drift. z2m 2.11.0 supports ^20.15 || ^22.2 || ^24.
+    curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+    apt-get install -y --download-only nodejs libsystemd-dev
     apt-get install -y nodejs libsystemd-dev   
 
     mkdir -p ${current_dir}/prebuild/deb/nodejs
@@ -144,13 +146,14 @@ if ! dpkg -l | grep -q "nodejs "; then
     
 fi
 
-if [ ! -d "/lib/node_modules/pnpm" ]; then
-    print_info "Installing pnpm..."
+if ! command -v pnpm >/dev/null 2>&1; then
+    print_info "Installing pnpm@10.18.3 (via China npm mirror)..."
     #npm install -g pnpm
-    npm install -g pnpm@10.18.3
+    # Use a China-accessible registry; the default registry.npmjs.org times out here.
+    npm install -g pnpm@10.18.3 --registry=https://mirrors.tencent.com/npm/
 fi
 
-print_info "node version should output V22.x, V24.x, current: \e[1;31m $(node --version)\e[0m "
+print_info "node version should output V24.x, current: \e[1;31m $(node --version)\e[0m "
 
 print_info "npm version should output 10.X, current: \e[1;31m $(npm --version)\e[0m "
 #npm --version # Should output 9.X or 10.X
@@ -204,7 +207,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
 
     print_info "Build zigbee-herdsman ..."
     mkdir -p /opt/zigbee-herdsman
-    git clone -b 3r_blz_7.0.3 https://github.com/thirdreality/zigbee-herdsman.git /opt/zigbee-herdsman
+    git clone -b 3r_blz_10.0.8 https://github.com/thirdreality/zigbee-herdsman.git /opt/zigbee-herdsman
 
     cd /opt/zigbee-herdsman
     dirty_id=$(/usr/bin/git describe --dirty --always)
@@ -222,7 +225,7 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     print_info "Build zigbee2mqtt ..."
     mkdir -p /opt/zigbee2mqtt
     #git clone --depth 1 https://github.com/Koenkk/zigbee2mqtt.git /opt/zigbee2mqtt
-    git clone -b 3r_blz_2.7.0 https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
+    git clone -b 3r_blz_2.11.0 https://github.com/thirdreality/zigbee2mqtt.git /opt/zigbee2mqtt
 
     cd /opt/zigbee2mqtt
     dirty_id=$(/usr/bin/git describe --dirty --always)
