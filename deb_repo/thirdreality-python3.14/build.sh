@@ -91,6 +91,9 @@ dependencies=(
     tk-dev 
     liblzma-dev 
     tk-dev
+    libffi-dev 
+    libgdbm-dev 
+    libgdbm-compat-dev
 )
 
 CURRENT_PYTHON=$(python3 --version | sed -E 's/Python\s+//')

@@ -91,6 +91,9 @@ dependencies=(
     tk-dev 
     liblzma-dev 
     tk-dev
+    libffi-dev 
+    libgdbm-dev 
+    libgdbm-compat-dev
 )
 
 CURRENT_PYTHON=$(python3 --version | sed -E 's/Python\s+//')
@@ -105,7 +108,6 @@ if [[ "$CURRENT_PYTHON" < "3.13.0" ]]; then
     if [ "$is_apt_installed" == "no" ]; then
         echo "Install python dependent packages ..."
         apt-get update
-        apt-get upgrade
         for package in "${dependencies[@]}"; do
             apt-get install -y "$package" || {
                 echo "Warning: Failed to install [$package]."
@@ -114,7 +116,7 @@ if [[ "$CURRENT_PYTHON" < "3.13.0" ]]; then
     fi
 
 
-    apt-get install libsqlite3-dev
+    apt-get install -y libsqlite3-dev
 
     # https://www.python.org/ftp/python/3.13.3/Python-3.13.3.tgz
     if [ ! -e "${current_dir}/Python-$INSTALL_PYTHON_VERSION.tgz" ]; then
