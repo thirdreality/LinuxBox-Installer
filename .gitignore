@@ -9,3 +9,6 @@ deb_repo/thirdreality-python3*/Python-*/
 
 # Cloned upstream source for otbr-agent build
 deb_repo/thirdreality-otbr-agent/ot-br-posix/
+
+# Temporary swapfile created by otbr-agent build.sh for low-memory devices
+deb_repo/thirdreality-otbr-agent/.otbr-build-swap

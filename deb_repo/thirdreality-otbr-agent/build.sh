@@ -32,6 +32,61 @@ print_info()  { echo -e "\e[1;34m[BUILD] INFO:\e[0m $1"; }
 print_error() { echo -e "\e[1;31m[BUILD] ERROR:\e[0m $1"; }
 print_step()  { echo -e "\e[1;32m[BUILD] ===== $1 =====\e[0m"; }
 
+# =============================================================================
+# OOM 保护：这台设备内存很小(~2GiB)，-j 全核编译 OpenThread 的 C++ 峰值会超内存。
+# 编译前按需创建临时 swap，编译结束(含失败/中断)由 trap 自动 swapoff 并删除。
+# 可用 OTBR_SKIP_SWAP=1 跳过；用 OTBR_SWAP_TARGET_MIB 调整目标(默认 4096MiB)。
+# =============================================================================
+OTBR_SWAPFILE="${current_dir}/.otbr-build-swap"
+OTBR_SWAP_CREATED=false
+
+cleanup_swap() {
+    if [[ "${OTBR_SWAP_CREATED}" == true ]]; then
+        print_info "清理临时 swap: ${OTBR_SWAPFILE}"
+        swapoff "${OTBR_SWAPFILE}" 2>/dev/null || true
+        rm -f "${OTBR_SWAPFILE}"
+        OTBR_SWAP_CREATED=false
+    fi
+}
+trap cleanup_swap EXIT
+
+ensure_swap() {
+    [[ "${OTBR_SKIP_SWAP:-0}" == "1" ]] && { print_info "OTBR_SKIP_SWAP=1，跳过 swap 检查"; return 0; }
+    [[ "$(id -u)" -eq 0 ]] || { print_info "非 root，跳过 swap 自动配置"; return 0; }
+
+    local want_mib="${OTBR_SWAP_TARGET_MIB:-4096}"
+    local mem_avail swap_free have need_mib disk_free_mib
+    mem_avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+    swap_free=$(free -m | awk '/Swap:/{print $4}')
+    have=$(( mem_avail + swap_free ))
+    print_info "内存检查: 可用RAM ${mem_avail}MiB + 空闲swap ${swap_free}MiB = ${have}MiB (目标 ${want_mib}MiB)"
+    (( have >= want_mib )) && { print_info "内存充足，无需临时 swap"; return 0; }
+
+    need_mib=$(( want_mib - have ))
+    disk_free_mib=$(df -Pm "${current_dir}" | awk 'NR==2{print $4}')
+    if (( disk_free_mib < need_mib + 2048 )); then
+        print_error "磁盘剩余 ${disk_free_mib}MiB，不足以创建 ${need_mib}MiB swap；继续编译但可能 OOM。建议先停掉 HA/matter-server/zigbee2mqtt 释放内存。"
+        return 0
+    fi
+
+    print_info "内存偏低，创建临时 swap ${need_mib}MiB: ${OTBR_SWAPFILE}"
+    rm -f "${OTBR_SWAPFILE}"
+    if fallocate -l "${need_mib}M" "${OTBR_SWAPFILE}" 2>/dev/null || \
+       dd if=/dev/zero of="${OTBR_SWAPFILE}" bs=1M count="${need_mib}" status=none; then
+        chmod 600 "${OTBR_SWAPFILE}"
+        mkswap "${OTBR_SWAPFILE}" >/dev/null 2>&1
+        if swapon "${OTBR_SWAPFILE}" 2>/dev/null; then
+            OTBR_SWAP_CREATED=true
+            print_info "临时 swap 已启用（编译结束自动清理）"
+        else
+            print_error "swapon 失败，继续（编译可能内存吃紧）"
+            rm -f "${OTBR_SWAPFILE}"
+        fi
+    else
+        print_error "创建 swap 文件失败，继续"
+    fi
+}
+
 print_info "Usage: build.sh [--rebuild] [--clean]"
 
 while [[ "$#" -gt 0 ]]; do
@@ -182,6 +237,9 @@ cd "${current_dir}"
 # Step 5: 复制 HA config.h，cmake-build + ninja install
 # =============================================================================
 print_step "Step 5: cmake-build (PREFIX=/usr)"
+
+# 编译前按需配置临时 swap，避免小内存设备 OOM
+ensure_swap
 
 CONFIG_H_DEST="${SRC_DIR}/third_party/openthread/repo/openthread-core-ha-config-posix.h"
 cp "${HA_CONFIG_H}" "${CONFIG_H_DEST}"
