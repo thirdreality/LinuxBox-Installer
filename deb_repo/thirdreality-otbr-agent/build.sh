@@ -40,6 +40,11 @@ print_step()  { echo -e "\e[1;32m[BUILD] ===== $1 =====\e[0m"; }
 OTBR_SWAPFILE="${current_dir}/.otbr-build-swap"
 OTBR_SWAP_CREATED=false
 
+# 编译期间临时停止的、与 otbr 编译无关的重内存服务（结束后自动恢复）。
+# 用 OTBR_KEEP_SERVICES=1 可保留不停。
+OTBR_MEM_SERVICES=(home-assistant.service matter-server.service zigbee2mqtt.service)
+OTBR_STOPPED_SERVICES=()
+
 cleanup_swap() {
     if [[ "${OTBR_SWAP_CREATED}" == true ]]; then
         print_info "清理临时 swap: ${OTBR_SWAPFILE}"
@@ -48,7 +53,38 @@ cleanup_swap() {
         OTBR_SWAP_CREATED=false
     fi
 }
-trap cleanup_swap EXIT
+
+restart_stopped_services() {
+    if (( ${#OTBR_STOPPED_SERVICES[@]} > 0 )); then
+        for svc in "${OTBR_STOPPED_SERVICES[@]}"; do
+            print_info "恢复服务: ${svc}"
+            systemctl start "${svc}" 2>/dev/null || print_error "恢复 ${svc} 失败，请手动: systemctl start ${svc}"
+        done
+        OTBR_STOPPED_SERVICES=()
+    fi
+}
+
+# 退出(含成功/失败/中断)时：先 swapoff(此时服务仍停、内存最空)，再恢复服务
+cleanup() {
+    cleanup_swap
+    restart_stopped_services
+}
+trap cleanup EXIT
+
+stop_unrelated_services() {
+    [[ "${OTBR_KEEP_SERVICES:-0}" == "1" ]] && { print_info "OTBR_KEEP_SERVICES=1，编译期间保留所有服务"; return 0; }
+    [[ "$(id -u)" -eq 0 ]] || { print_info "非 root，跳过临时停止服务"; return 0; }
+    command -v systemctl >/dev/null 2>&1 || return 0
+    for svc in "${OTBR_MEM_SERVICES[@]}"; do
+        if systemctl is-active --quiet "${svc}" 2>/dev/null; then
+            print_info "编译期间临时停止无关服务: ${svc}"
+            if systemctl stop "${svc}" 2>/dev/null; then
+                OTBR_STOPPED_SERVICES+=("${svc}")
+            fi
+        fi
+    done
+    [[ ${#OTBR_STOPPED_SERVICES[@]} -eq 0 ]] && print_info "无可停止的无关服务" || true
+}
 
 ensure_swap() {
     [[ "${OTBR_SKIP_SWAP:-0}" == "1" ]] && { print_info "OTBR_SKIP_SWAP=1，跳过 swap 检查"; return 0; }
@@ -238,7 +274,8 @@ cd "${current_dir}"
 # =============================================================================
 print_step "Step 5: cmake-build (PREFIX=/usr)"
 
-# 编译前按需配置临时 swap，避免小内存设备 OOM
+# 编译前：先停掉无关重内存服务(结束自动恢复)，再按需配置临时 swap，避免 OOM
+stop_unrelated_services
 ensure_swap
 
 CONFIG_H_DEST="${SRC_DIR}/third_party/openthread/repo/openthread-core-ha-config-posix.h"
