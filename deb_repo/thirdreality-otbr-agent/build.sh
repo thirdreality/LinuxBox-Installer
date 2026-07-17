@@ -268,6 +268,9 @@ chmod +x "${output_dir}/usr/lib/thirdreality/otbr-firewall.sh"
 # --- otbr-agent drop-in：启动建防火墙、停止拆防火墙；受 hubv3 总闸管控，带起 web ---
 cat > "${output_dir}/etc/systemd/system/otbr-agent.service.d/firewall.conf" << 'EOF'
 [Unit]
+# 我们用 -DOTBR_DBUS=OFF 编译，agent 不需要 dbus；清掉上游模板写死的 dbus 硬依赖
+# （空赋值会重置该依赖列表），否则无 dbus 的设备会因 Requires=dbus.socket 起不来。
+Requires=
 # 受 hubv3-otbr-agent 总闸管控：停/重启 hubv3 时连带停/重启本服务
 PartOf=hubv3-otbr-agent.service
 # 起 otbr-agent 时连带把 web UI 拉起来

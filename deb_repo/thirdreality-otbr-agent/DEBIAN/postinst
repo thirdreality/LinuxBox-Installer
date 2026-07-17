@@ -72,6 +72,9 @@ if [ "$1" = "configure" ]; then
     # 所以 otbr-agent/otbr-web 不单独 enable，由总闸拉起。没 Thread 芯片/不想用的设备
     # 只需 disable hubv3-otbr-agent 即整套关闭。
     systemctl daemon-reload
+    # 清掉旧版可能遗留的独立自启（旧 postinst 曾 enable otbr-agent/otbr-web），
+    # 新模型下它们只由总闸 hubv3 拉起，不应独立 enable。
+    systemctl disable otbr-agent.service otbr-web.service 2>/dev/null || true
     systemctl enable hubv3-otbr-agent.service || true
 
     # 检查是否有备份恢复流程，有则跳过自动启动
