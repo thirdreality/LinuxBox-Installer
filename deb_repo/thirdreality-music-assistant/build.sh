@@ -15,6 +15,11 @@ SCRIPT="R3"
 print_info() { echo -e "\e[1;34m[${SCRIPT}] INFO:\e[0m $1"; }
 print_error() { echo -e "\e[1;31m[${SCRIPT}] ERROR:\e[0m $1"; }
 
+# OOM 保护 + 编译期临时停无关重内存服务（结束自动恢复）。逻辑复用仓库根
+# deb_repo/build_common.sh。开关: TR_SKIP_SWAP=1 / TR_KEEP_SERVICES=1 / TR_SWAP_TARGET_MIB=N
+source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
+TR_SWAPFILE="${current_dir}/.build-swap"
+
 print_info "Build script for ThirdReality Music-Assistant-Server"
 print_info "Usage: Build.sh [--rebuild] [--clean]"
 print_info "Options:"
@@ -31,7 +36,11 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export MUSIC_ASSISTANT_VERSION="2.6.3"
+# 说明: 2.9.0 起 Music Assistant 要求 Python 3.14 (.python-version=3.14,
+# pyproject requires-python>=3.14)。本设备使用 Python 3.13，故锁定在
+# 支持 Python 3.13 的最新稳定版 2.8.9 (requires-python>=3.12,
+# classifiers 含 3.12/3.13)。升级前请确认目标版本仍兼容 Python 3.13。
+export MUSIC_ASSISTANT_VERSION="2.8.9"
 
 version=$(grep '^Version:' ${current_dir}/prebuild/DEBIAN/control | awk '{print $2}')
 print_info "Version: $version"
@@ -98,7 +107,7 @@ else
     exit 1  
 fi
 
-if [[ "$CURRENT_PYTHON" < "3.13.0" ]]; then
+if tr_ver_lt "$CURRENT_PYTHON" "3.13.0"; then
     print_info "Python 3.13+ is needed, abort ..."
     exit 1
 fi
@@ -121,6 +130,8 @@ fi
 
 if [ ! -e "${music_assistant_path}/bin/mass" ]; then
     print_info "Building python music assistant venv for music-assistant_${version}.deb ..."
+    # 编译前：停无关重内存服务(结束自动恢复) + 按需临时 swap，避免 OOM
+    tr_build_guard_start
     mkdir -p ${music_assistant_path}
 
     print_info "Using python[music_assistant]: ${python3_dir}/bin/python3"
