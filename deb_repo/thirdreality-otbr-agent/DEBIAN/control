@@ -3,7 +3,7 @@ Version: 2026.07.0
 Section: utils
 Priority: optional
 Architecture: arm64
-Depends: iptables, ipset, iputils-ping, libprotobuf-lite32, libjsoncpp25, iproute2, bind9
+Depends: iptables, ipset, iputils-ping, libprotobuf-lite32, libjsoncpp25, iproute2
 Maintainer: guoping.liu <guoping.liu@3reality.com>
 Description: A custom Open Thread Board Router package for ThirdReality LinuxBox Dev Edition.
  Thread 1.4, ot-br-posix v2026.07.0 (commit ec16e396, OTBR_MDNS=openthread, web gui enabled).
