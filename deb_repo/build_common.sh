@@ -41,7 +41,8 @@ TR_STOPPED_SERVICES=()
 # 默认要临时停止的重内存服务；调用方可用 TR_MEM_SERVICES=(...) 覆盖
 if [[ -z "${TR_MEM_SERVICES+x}" ]]; then
     TR_MEM_SERVICES=(home-assistant.service matter-server.service \
-                     zigbee2mqtt.service mosquitto.service music-assistant.service)
+                     zigbee2mqtt.service mosquitto.service music-assistant.service \
+                     otbr-agent.service otbr-web.service)
 fi
 
 tr_cleanup_swap() {

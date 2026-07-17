@@ -7,7 +7,8 @@ output_dir="${current_dir}/output"
 # 不含 mosquitto：本脚本自身负责启停 mosquitto。
 source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
 TR_SWAPFILE="${current_dir}/.build-swap"
-TR_MEM_SERVICES=(home-assistant.service matter-server.service music-assistant.service)
+TR_MEM_SERVICES=(home-assistant.service matter-server.service music-assistant.service \
+                 otbr-agent.service otbr-web.service)
 
 REBUILD=false
 CLEAN=false
