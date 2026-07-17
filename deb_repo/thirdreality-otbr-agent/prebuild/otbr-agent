@@ -6,3 +6,10 @@
 # --rest-listen-port:    REST API 端口（默认 8081）
 OTBR_AGENT_OPTS="-I wpan0 -B wlan0 -d 5 --rest-listen-address 0.0.0.0 --rest-listen-port 8081 spinel+hdlc+uart:///dev/ttyAML6?uart-baudrate=115200 trel://wlan0"
 OTBR_NO_AUTO_ATTACH=0
+
+# 防火墙 / NAT64 开关（由 /usr/lib/thirdreality/otbr-firewall.sh 读取）与接口名。
+# THREAD_IF 必须与 OTBR_AGENT_OPTS 的 -I 一致；BACKBONE_IF 与 -B 一致。
+OTBR_THREAD_IF=wpan0
+OTBR_BACKBONE_IF=wlan0
+OTBR_FIREWALL=1
+OTBR_NAT64=1

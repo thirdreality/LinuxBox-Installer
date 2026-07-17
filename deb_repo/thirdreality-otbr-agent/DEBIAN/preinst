@@ -1,7 +1,8 @@
 #!/bin/bash
 # 安装/升级前：停止旧服务
 
-for svc in otbr-web otbr-agent otbr-firewall hubv3-otbr-agent; do
+# 先停总闸 hubv3（PartOf 连带停 otbr-agent→触发防火墙 teardown，BindsTo 连带停 otbr-web），再逐个兜底
+for svc in hubv3-otbr-agent otbr-web otbr-agent; do
     if systemctl is-active --quiet "${svc}" 2>/dev/null; then
         echo "Stopping ${svc}..."
         systemctl stop    "${svc}" || true

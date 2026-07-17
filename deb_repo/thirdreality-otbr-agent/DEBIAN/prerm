@@ -4,20 +4,22 @@ set -e
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     echo "Stopping OTBR services..."
 
-    for svc in otbr-web otbr-agent otbr-firewall hubv3-otbr-agent; do
+    # 先停总闸 hubv3（连带停 agent→触发 ExecStopPost 拆防火墙、web 跟随），再逐个兜底
+    for svc in hubv3-otbr-agent otbr-web otbr-agent; do
         systemctl stop    "${svc}" 2>/dev/null || true
         systemctl disable "${svc}" 2>/dev/null || true
     done
 
     killall otbr-web otbr-agent 2>/dev/null || true
 
-    # 清理 firewall ipset & iptables
-    /etc/init.d/otbr-firewall stop 2>/dev/null || true
-    update-rc.d otbr-firewall remove 2>/dev/null || true
+    # 兜底拆防火墙 ipset & iptables（万一 ExecStopPost 没跑）
+    [ -x /usr/lib/thirdreality/otbr-firewall.sh ] && /usr/lib/thirdreality/otbr-firewall.sh teardown 2>/dev/null || true
 
     # 清理 drop-in
     rm -f /etc/systemd/system/otbr-agent.service.d/firewall.conf
+    rm -f /etc/systemd/system/otbr-web.service.d/ordering.conf
     rmdir /etc/systemd/system/otbr-agent.service.d 2>/dev/null || true
+    rmdir /etc/systemd/system/otbr-web.service.d 2>/dev/null || true
 
     systemctl daemon-reload
 

@@ -64,18 +64,15 @@ if [ "$1" = "configure" ]; then
     # --- 脚本权限 ---
     chmod +x /usr/lib/thirdreality/hubv3-otbr-agent.sh || true
     chmod +x /usr/lib/thirdreality/otbr_database       || true
-    chmod +x /etc/init.d/otbr-firewall
-
-    # --- 注册 otbr-firewall（兜底，ExecStartPre 是主路径）---
-    update-rc.d otbr-firewall defaults || true
-
-    # --- 启动 firewall，创建 ipset ---
-    /etc/init.d/otbr-firewall start || true
+    chmod +x /usr/lib/thirdreality/otbr-firewall.sh    || true
 
     # --- systemd ---
+    # 防火墙由 otbr-agent.service 的 ExecStartPre/ExecStopPost 成对建/拆，这里不再单独起。
+    # 只 enable 总闸 hubv3-otbr-agent：它 Wants=otbr-agent（进而 Wants=otbr-web），
+    # 所以 otbr-agent/otbr-web 不单独 enable，由总闸拉起。没 Thread 芯片/不想用的设备
+    # 只需 disable hubv3-otbr-agent 即整套关闭。
     systemctl daemon-reload
-    systemctl enable otbr-agent.service  || true
-    systemctl enable otbr-web.service    || true
+    systemctl enable hubv3-otbr-agent.service || true
 
     # 检查是否有备份恢复流程，有则跳过自动启动
     SKIP_AUTO_CONFIG=false
@@ -88,8 +85,8 @@ if [ "$1" = "configure" ]; then
     fi
 
     if [ "$SKIP_AUTO_CONFIG" = "false" ]; then
-        systemctl start otbr-agent.service || true
-        systemctl start otbr-web.service   || true
+        # 起总闸即拉起 otbr-agent（ExecStartPre 建防火墙）并带起 otbr-web
+        systemctl start hubv3-otbr-agent.service || true
 
         if [ -e "/usr/local/bin/supervisor" ]; then
             /usr/local/bin/supervisor thread enabled || true

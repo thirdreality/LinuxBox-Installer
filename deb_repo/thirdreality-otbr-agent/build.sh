@@ -59,17 +59,21 @@ print_info "Version: ${version}  Commit: ${COMMIT}"
 # =============================================================================
 otbr_uninstall() {
     echo "停止并禁用服务..."
-    for svc in otbr-web otbr-agent otbr-firewall hubv3-otbr-agent; do
+    # 先停总闸 hubv3（连带停 agent→触发防火墙 teardown、web 跟随），再逐个兜底
+    for svc in hubv3-otbr-agent otbr-web otbr-agent; do
         systemctl stop    "${svc}" 2>/dev/null || true
         systemctl disable "${svc}" 2>/dev/null || true
     done
     killall otbr-web otbr-agent 2>/dev/null || true
 
-    # 清理 firewall
-    update-rc.d otbr-firewall remove 2>/dev/null || true
-    rm -f /etc/init.d/otbr-firewall
+    # 兜底拆防火墙（万一 ExecStopPost 没跑）
+    [ -x /usr/lib/thirdreality/otbr-firewall.sh ] && /usr/lib/thirdreality/otbr-firewall.sh teardown 2>/dev/null || true
+
+    # 清理 drop-in
     rm -f /etc/systemd/system/otbr-agent.service.d/firewall.conf
+    rm -f /etc/systemd/system/otbr-web.service.d/ordering.conf
     rmdir /etc/systemd/system/otbr-agent.service.d 2>/dev/null || true
+    rmdir /etc/systemd/system/otbr-web.service.d 2>/dev/null || true
 
     systemctl daemon-reload
 
@@ -116,10 +120,10 @@ mkdir -p "${output_dir}/usr/share"
 mkdir -p "${output_dir}/usr/lib/systemd/system"
 mkdir -p "${output_dir}/usr/lib/thirdreality"
 mkdir -p "${output_dir}/etc/default"
-mkdir -p "${output_dir}/etc/init.d"
 mkdir -p "${output_dir}/etc/sysctl.d"
 mkdir -p "${output_dir}/etc/modules-load.d"
 mkdir -p "${output_dir}/etc/systemd/system/otbr-agent.service.d"
+mkdir -p "${output_dir}/etc/systemd/system/otbr-web.service.d"
 
 # =============================================================================
 # Step 2: 下载 HA 配置文件
@@ -225,6 +229,7 @@ WEB_GUI=1 REST_API=1 DOCKER=1 OTBR_MDNS=openthread \
     -DOT_COAP=OFF \
     -DOT_COAPS=OFF \
     -DOT_THREAD_VERSION=1.4 \
+    -DOT_RCP_RESTORATION_MAX_COUNT=2 \
     "-DOT_PROJECT_CONFIG=${CONFIG_H_DEST}"
 
 cd "${SRC_DIR}/build/otbr"
@@ -256,14 +261,29 @@ cp "${current_dir}/prebuild/otbr_database"             "${output_dir}/usr/lib/th
 chmod +x "${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh"
 chmod +x "${output_dir}/usr/lib/thirdreality/otbr_database"
 
-# --- otbr-firewall init.d 脚本 ---
-cp "${SRC_DIR}/script/otbr-firewall" "${output_dir}/etc/init.d/otbr-firewall"
-chmod +x "${output_dir}/etc/init.d/otbr-firewall"
+# --- 防火墙脚本（建/拆 ip6tables/ipset/NAT64，替代旧 init.d otbr-firewall）---
+cp "${current_dir}/prebuild/otbr-firewall.sh" "${output_dir}/usr/lib/thirdreality/otbr-firewall.sh"
+chmod +x "${output_dir}/usr/lib/thirdreality/otbr-firewall.sh"
 
-# --- otbr-agent drop-in：ExecStartPre 先建 ipset ---
+# --- otbr-agent drop-in：启动建防火墙、停止拆防火墙；受 hubv3 总闸管控，带起 web ---
 cat > "${output_dir}/etc/systemd/system/otbr-agent.service.d/firewall.conf" << 'EOF'
+[Unit]
+# 受 hubv3-otbr-agent 总闸管控：停/重启 hubv3 时连带停/重启本服务
+PartOf=hubv3-otbr-agent.service
+# 起 otbr-agent 时连带把 web UI 拉起来
+Wants=otbr-web.service
+
 [Service]
-ExecStartPre=-/etc/init.d/otbr-firewall start
+# 每次启动成对建/拆防火墙，避免规则残留叠加
+ExecStartPre=/usr/lib/thirdreality/otbr-firewall.sh setup
+ExecStopPost=/usr/lib/thirdreality/otbr-firewall.sh teardown
+EOF
+
+# --- otbr-web drop-in：绑定 otbr-agent 生命周期（agent 停/重启 → web 跟随）---
+cat > "${output_dir}/etc/systemd/system/otbr-web.service.d/ordering.conf" << 'EOF'
+[Unit]
+After=otbr-agent.service
+BindsTo=otbr-agent.service
 EOF
 
 # --- env 配置文件（路径与旧版一致：/etc/default/otbr-agent）---
