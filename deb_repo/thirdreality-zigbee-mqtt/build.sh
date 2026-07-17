@@ -167,6 +167,19 @@ print_info "npm version should output 10.X, current: \e[1;31m $(npm --version)\e
 print_info "pnpm version should output 10.X, current: \e[1;31m $(pnpm --version)\e[0m "
 
 
+# node-gyp 默认从 nodejs.org 下载 Node 头文件，国内会 ETIMEDOUT，导致原生模块
+# (如 zigbee2mqtt 的可选依赖 unix-dgram) 编译失败；失败回滚还会污染 node-gyp 缓存
+# (留下缺 common.gypi 的半成品目录)。这里改用国内可达镜像下载头文件，并在缓存残缺时
+# 清理，保证原生模块能干净编译。
+export npm_config_disturl="https://mirrors.tencent.com/nodejs-release"
+print_info "node-gyp disturl: ${npm_config_disturl}"
+NODE_FULL_VER="$(node --version 2>/dev/null | sed 's/^v//')"
+if [ -n "${NODE_FULL_VER}" ] && [ ! -f "${HOME}/.cache/node-gyp/${NODE_FULL_VER}/common.gypi" ]; then
+    print_info "Cleaning incomplete node-gyp cache for ${NODE_FULL_VER} ..."
+    rm -rf "${HOME}/.cache/node-gyp/${NODE_FULL_VER}"
+fi
+
+
 # --------------------- 自动清理deb目录旧包，只保留每个包类型的最新版 ---------------------
 print_info "Cleaning old debs in prebuild/deb/ (top-level), only keeping the latest version for each software..."
 cd ${current_dir}/prebuild/deb 2>/dev/null || exit 0
