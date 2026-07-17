@@ -55,8 +55,9 @@ bookworm，用的是 `libjsoncpp25`**（系统实际为 1.9.5-4）。所以 `Dep
 
 ### 用 dpkg 安装时的依赖
 
-`dpkg -i thirdreality-otbr-agent_*.deb` **不会自动解析 Depends**。若提示缺
-`libjsoncpp25` 等，安装后补一句：`apt-get -f install`。
+`dpkg -i otbr-agent_*.deb` **不会自动解析 Depends**（包名仍是 `thirdreality-otbr-agent`，
+只是产出文件名用短名 `otbr-agent_<版本>.deb`）。若提示缺 `libjsoncpp25` 等，安装后补一句：
+`apt-get -f install`。
 
 ---
 

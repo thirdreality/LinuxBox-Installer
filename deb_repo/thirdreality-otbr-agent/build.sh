@@ -325,6 +325,6 @@ find "${output_dir}" -type f | grep -v "^${output_dir}/DEBIAN" | sort
 # =============================================================================
 print_step "Step 8: dpkg-deb"
 
-dpkg-deb --build "${output_dir}" "${current_dir}/thirdreality-otbr-agent_${version}.deb"
+dpkg-deb --build "${output_dir}" "${current_dir}/otbr-agent_${version}.deb"
 
-print_info "构建完成: thirdreality-otbr-agent_${version}.deb"
+print_info "构建完成: otbr-agent_${version}.deb"
