@@ -3,6 +3,12 @@
 current_dir=$(pwd)
 output_dir="${current_dir}/output"
 
+# OOM 保护 + 构建期临时停无关服务（pnpm 构建 herdsman/z2m 内存吃紧）。
+# 不含 mosquitto：本脚本自身负责启停 mosquitto。
+source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
+TR_SWAPFILE="${current_dir}/.build-swap"
+TR_MEM_SERVICES=(home-assistant.service matter-server.service music-assistant.service)
+
 REBUILD=false
 CLEAN=false
 DISTCLEAN=false
@@ -203,6 +209,9 @@ rm -rf ${output_dir}/DEBIAN > /dev/null 2>&1
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
 if [ ! -d "/opt/zigbee2mqtt" ]; then
+    # 进入 pnpm 重构建前：停无关服务 + 按需加 swap（结束自动清理/恢复）
+    tr_build_guard_start
+
     cp ${current_dir}/prebuild/zigbee2mqtt.service /etc/systemd/system/zigbee2mqtt.service
 
     print_info "Build zigbee-herdsman ..."

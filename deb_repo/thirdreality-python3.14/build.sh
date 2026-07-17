@@ -3,6 +3,10 @@
 current_dir=$(pwd)
 output_dir="${current_dir}/output"
 
+# OOM 保护 + 编译期临时停无关服务（内存小，PGO 编译易 OOM）
+source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
+TR_SWAPFILE="${current_dir}/.build-swap"
+
 REBUILD=false
 CLEAN=false
 
@@ -103,7 +107,10 @@ fi
 
 echo "Current python version is ${CURRENT_PYTHON} "
 
-if [[ "$CURRENT_PYTHON" < "3.14.0" ]]; then
+if tr_ver_lt "$CURRENT_PYTHON" "3.14.0"; then
+    # 进入实际编译前：停无关服务 + 按需加 swap（结束自动清理/恢复）
+    tr_build_guard_start
+
     is_apt_installed=$(dpkg -s libreadline-dev &>/dev/null && echo "yes" || echo "no")
     if [ "$is_apt_installed" == "no" ]; then
         echo "Install python dependent packages ..."
@@ -165,7 +172,7 @@ if [ -f "${python3_dir}/bin/python3" ]; then
     CURRENT_PYTHON=$("${python3_dir}/bin/python${PYTHON_VERSION}" --version | sed -E 's/Python\s+//')
 fi
 
-if [[ "$CURRENT_PYTHON" < "3.14.0" ]]; then
+if tr_ver_lt "$CURRENT_PYTHON" "3.14.0"; then
     echo "Python install may fail, abort ..."
     exit 1
 fi

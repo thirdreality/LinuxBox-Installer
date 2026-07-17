@@ -6,6 +6,10 @@ home_assistant_path="/srv/homeassistant"
 matter_server_path="/srv/matter_server"
 python3_dir="/usr/local/python3" # install target directory
 
+# OOM 保护 + 装包期临时停无关服务（HA 安装大量 wheel，内存吃紧）
+source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
+TR_SWAPFILE="${current_dir}/.build-swap"
+
 UV_INSTALLED=false
 
 REBUILD=false
@@ -131,7 +135,7 @@ else
     exit 1  
 fi
 
-if [[ "$CURRENT_PYTHON" < "${REQUIRED_PYTHON_MAJOR}.0" ]]; then
+if tr_ver_lt "$CURRENT_PYTHON" "${REQUIRED_PYTHON_MAJOR}.0"; then
     print_info "Python ${REQUIRED_PYTHON_MAJOR}+ is needed (current: $CURRENT_PYTHON), abort ..."
     exit 1
 fi
@@ -157,6 +161,11 @@ if [ ! -f "/usr/local/bin/chip-ota-provider-app" ]; then
     if [ -f "/usr/local/bin/chip-ota-provider-app" ]; then
         strip /usr/local/bin/chip-ota-provider-app
     fi
+fi
+
+if [ ! -e "${home_assistant_path}/bin/hass" ] || [ ! -e "${matter_server_path}/bin/matter-server" ]; then
+    # 进入实际装包前：停无关服务 + 按需加 swap（结束自动清理/恢复）
+    tr_build_guard_start
 fi
 
 if [ ! -e "${home_assistant_path}/bin/hass" ]; then
