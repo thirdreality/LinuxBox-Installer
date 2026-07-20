@@ -60,6 +60,9 @@ ThirdReality LinuxBox (hubv3) 智能家居网关发布说明。
 - **Armbian 6.6.120**（新内核）
 - **Armbian 5.10.247**（旧内核，兼容用途）
 
+> ⚠️ **Armbian 6.6.120 尚未针对 `music-assistant_2.8.9.deb` 做定制**，不建议在 Armbian
+> 6.6.120 平台上直接安装 Music Assistant。
+
 ### 镜像变更
 
 1. **调整 `/boot` 分区** —— 避免 ext4 分区写坏时导致设备完全无法启动，提升系统的可恢复性。
