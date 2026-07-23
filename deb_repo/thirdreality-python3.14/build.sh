@@ -11,7 +11,7 @@ REBUILD=false
 CLEAN=false
 
 PYTHON_VERSION="3.14" # main version
-INSTALL_PYTHON_VERSION="3.14.5" # sub verion, for download
+INSTALL_PYTHON_VERSION="3.14.6" # sub verion, for download
 python3_dir="/usr/local/python3" # install target directory
 
 SCRIPT="R3"

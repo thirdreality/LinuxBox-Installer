@@ -74,16 +74,13 @@ create_directories() {
     mkdir -p /var/lib/homeassistant/matter_server
     mkdir -p /var/lib/homeassistant/upgrade-logs
     
+    # matter.js 会把 WiFi 凭据等敏感数据明文写入 matter_server/config/wal，
+    # 收紧目录权限，避免非 root 用户读取（旧 python-matter-server 时代无此需求）。
+    chmod 700 /var/lib/homeassistant/matter_server 2>/dev/null || true
+    
     # 创建运行时目录（使用更安全的权限）
     mkdir -p /data /updates
     chmod 755 /data /updates
-    
-    # 创建临时文件（使用更安全的权限）
-    if [ ! -f "/tmp/chip_kvs" ]; then
-        touch /tmp/chip_kvs && chmod 660 /tmp/chip_kvs || {
-            warn "Failed to setup /tmp/chip_kvs"
-        }
-    fi
     
     log_upgrade "Directories created successfully"
 }
@@ -98,7 +95,6 @@ setup_script_permissions() {
         "home_assistant_zha_enable.py"
         "home_assistant_zigbee_fix.sh"
         "home_assistant_init.sh"
-        "home_assistant_matter_fix.sh"
         "home_assistant_boot_check.py"
     )
     
@@ -154,21 +150,17 @@ update_zigbee_config() {
     fi
 }
 
-# 修复 Matter Server vendorId
-fix_matter_vendor_id() {
-    info "Checking Matter Server vendorId..."
-    
-    if [ -e "/srv/homeassistant/bin/home_assistant_matter_fix.sh" ]; then
-        chmod +x /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1
-
-        if [ -e "/var/lib/homeassistant/matter_server/chip.json" ]; then
-            /srv/homeassistant/bin/home_assistant_matter_fix.sh > /dev/null 2>&1 || {
-                warn "home_assistant_matter_fix.sh failed, but continuing..." 
-                log_upgrade "WARNING: home_assistant_matter_fix.sh failed"
-            }
-            log_upgrade "Matter Server vendorId fixed"
-        fi
+# 校验 Node.js（matter.js server 运行依赖，系统应自带 24.x）
+check_nodejs() {
+    if ! command -v node >/dev/null 2>&1; then
+        warn "Node.js not found. Matter Server (matter.js) will NOT start."
+        warn "Please install Node.js >= 22.13 (armbian/buildroot normally ships 24.x)."
+        log_upgrade "WARNING: Node.js missing, matter-server cannot run"
+        return 1
     fi
+    info "Node.js detected: $(node --version)"
+    log_upgrade "Node.js detected: $(node --version)"
+    return 0
 }
 
 # 配置并启动服务
@@ -295,7 +287,7 @@ main() {
             update_zigbee_config "false"  # 升级，跳过初始化
         fi
         
-        fix_matter_vendor_id
+        check_nodejs || true
         configure_services
         start_services_if_network_ready
         

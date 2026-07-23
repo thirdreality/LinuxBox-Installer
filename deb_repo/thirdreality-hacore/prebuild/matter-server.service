@@ -1,13 +1,18 @@
 [Unit]
-Description=Matter Server
+Description=Matter Server (matter.js)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=PATH=/srv/matter_server/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WorkingDirectory=/srv/matter_server
+Environment=PATH=/usr/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin:/bin
+Environment=NODE_ENV=production
 ExecStartPre=/bin/sleep 5
-ExecStart=/srv/matter_server/bin/matter-server --vendorid 4939 --bluetooth-adapter 0 --storage-path /var/lib/homeassistant/matter_server --paa-root-cert-dir /var/lib/homeassistant/matter_server/credentials --log-file /var/lib/homeassistant/matter_server/matter_server.log
+# BLE 配对通过 HA 的 BLE proxy（matter-ble-proxy, 走 BlueZ/bleak）完成，
+# 不使用 --bluetooth-adapter：noble 的 raw HCI socket 会与 bluetoothd/HA 蓝牙
+# 集成争抢 hci0，导致配对中途 LE 连接被 bluetoothd 断开（已在真机复现）。
+ExecStart=/usr/bin/node --enable-source-maps /srv/matter_server/node_modules/matter-server/dist/esm/MatterServer.js --storage-path /var/lib/homeassistant/matter_server --port 5580 --vendorid 4939 --fabricid 2 --ble-proxy --log-level info --log-file /var/lib/homeassistant/matter_server/matter_server.log
 Restart=on-failure
 RestartSec=15
 StartLimitInterval=300

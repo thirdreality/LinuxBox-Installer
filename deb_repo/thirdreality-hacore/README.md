@@ -3,15 +3,27 @@
 为 ThirdReality LinuxBox Dev Edition 构建的 Home Assistant Core + Matter Server
 `.deb` 包（arm64）。包含两部分：
 
-- `build.sh` —— 编译打包脚本（HA venv、matter-server venv、辅助脚本与 systemd 服务）。
+- `build.sh` —— 编译打包脚本（HA venv、matter.js server、辅助脚本与 systemd 服务）。
 - `sync_all_versions.py` —— 依赖版本同步工具，自动把 build.sh / `prebuild/DEBIAN/control`
   里的版本号更新到某个 HA Core 版本对应的依赖版本。
+
+> **架构说明（HA 2026.7 起）**：Matter 服务端从停更的 Python `python-matter-server[server]`
+> 迁移到 **Node.js 的 matter.js server**（npm 包 `matter-server`，官方 add-on 同款，
+> WebSocket 协议兼容、首启自动迁移旧 `chip.json` 数据）。HA 端的 matter 集成客户端库也随之
+> 从 `python-matter-server` 改名拆分为 `matter-python-client` + `matter-ble-proxy`。
 
 ---
 
 ## 一、构建 `.deb`
 
-依赖前置包 `thirdreality-python3`（提供 `/usr/local/python3`，需 Python ≥ 3.13）。
+前置依赖：
+- `thirdreality-python3`（提供 `/usr/local/python3`，需 Python ≥ 3.14）。
+- 系统自带 **Node.js ≥ 22.13**（armbian / buildroot 默认自带 24.x），用于运行 matter.js server。
+  Node 不打进本包，仅在构建时用 `npm install` 拉取 `matter-server` 到 `/srv/matter_server`。
+
+> **离线/内网构建**：只要 `/srv/matter_server/node_modules/matter-server/...` 与 `/srv/homeassistant/bin/hass`
+> 已存在，重复构建**完全不联网**。内网有 npm 镜像/私服时，用环境变量
+> `NPM_REGISTRY_URL=<url> ./build.sh` 指定源即可。
 
 ```bash
 ./build.sh            # 构建（已存在的 venv 不会重装，直接重新打包）
@@ -49,14 +61,13 @@ HA 首次启动时会通过 `homeassistant.util.package` 按已加载的集成**
 | 来源 | 用途 |
 |------|------|
 | `home-assistant/core` GitHub release | HA Core 版本（`--version` 未指定时取 latest） |
-| core 仓库 `requirements_all.txt`（对应 tag） | frontend、zha、python-matter-server、各集成依赖 |
+| core 仓库 `requirements_all.txt`（对应 tag） | frontend、zha、matter-python-client、matter-ble-proxy、各集成依赖 |
 | core 仓库 `requirements.txt`（对应 tag） | 预留（当前目标包列表为空） |
 | core 仓库 `script/hassfest/docker/Dockerfile` | hassfest 工具链包段（见下方限制） |
-| `home-assistant-libs/python-matter-server` GitHub release | matter-server 版本（见下方**注意**） |
-| matter-server 的 `Dockerfile` | chip-ota-provider 版本 → `chip_example_url` |
+| npm registry `matter-server/latest` | matter.js 服务端版本 → `MATTER_SERVER_NPM_VERSION` |
 
-会被更新的目标：`export HOME_ASSISTANT_VERSION` / `MATTER_SERVER_VERSION` /
-`FRONTEND_VERSION`、`chip_example_url`、build.sh 中形如 `pkg==x.y.z` 的行，以及
+会被更新的目标：`export HOME_ASSISTANT_VERSION` / `MATTER_SERVER_NPM_VERSION` /
+`FRONTEND_VERSION`、build.sh 中形如 `pkg==x.y.z` 的行，以及
 `prebuild/DEBIAN/control` 的 `Version:`。
 
 ### 用法
@@ -81,12 +92,11 @@ HA 首次启动时会通过 `homeassistant.util.package` 按已加载的集成**
 
 ### ⚠️ 已知限制 / 注意事项
 
-1. **matter-server 取的是 GitHub “latest”，未与 HA 目标版本绑定。**
-   `MATTER_SERVER_VERSION`（独立服务端）来自 matter-server 最新 release，而 HA venv 里的
-   `python-matter-server==`（客户端）来自 `requirements_all.txt`，两者可能不一致。
-   **注意：Python 版 python-matter-server 已停止演进，`8.1.2` 基本是最后一个受支持的版本。**
-   因此 `MATTER_SERVER_VERSION` 应固定保持在 `8.1.2`，同步后请确认它**没有**被意外改动；
-   不要让它去追新的 release。
+1. **matter.js 服务端（`MATTER_SERVER_NPM_VERSION`）取的是 npm `latest`，未与 HA 目标版本绑定。**
+   它来自 npm registry 的 `matter-server/latest`，与 HA venv 里客户端库
+   `matter-python-client` / `matter-ble-proxy`（来自 `requirements_all.txt`）是两条线，
+   可能不完全同步。当前显式 pin 在 `1.2.8`；同步到新 HA 版本后请 `git diff` 复核，
+   确认服务端与客户端版本组合仍兼容（两者都基于同一套 WebSocket 协议）。
 
 2. **`--restore` 跨进程不可用。** 备份文件名的时间戳在启动时生成，单独再跑 `--restore`
    时时间戳已变、找不到旧备份。需要回滚请直接 `git checkout build.sh` 或手动指定备份文件。

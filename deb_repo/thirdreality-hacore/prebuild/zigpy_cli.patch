@@ -1,5 +1,5 @@
 --- zigpy-cli/zigpy_cli/const.py	2025-07-01 07:53:48.909632575 +0000
-+++ /srv/homeassistant/lib/python3.13/site-packages/zigpy_cli/const.py	2025-07-01 07:07:04.411923023 +0000
++++ /srv/homeassistant/lib/python3.14/site-packages/zigpy_cli/const.py	2025-07-01 07:07:04.411923023 +0000
 @@ -14,6 +14,7 @@
      "zboss": "zigpy_zboss",
      "zigate": "zigpy_zigate",

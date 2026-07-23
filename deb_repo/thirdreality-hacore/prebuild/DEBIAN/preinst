@@ -118,15 +118,15 @@ check_and_backup() {
     return
 }
 
-# 检查 Python 3.13 是否存在
+# 检查 Python 3.14 是否存在
 check_python() {
-    [ -f "/usr/bin/python3.13" ] || \
-    [ -f "/usr/local/bin/python3.13" ] || \
-    [ -f "/usr/local/python3/bin/python3.13" ] || {
-        log_error "Python 3.13 not found in any of:"
-        log_error "  /usr/bin/python3.13"
-        log_error "  /usr/local/bin/python3.13"
-        log_error "  /usr/local/python3/bin/python3.13"
+    [ -f "/usr/bin/python3.14" ] || \
+    [ -f "/usr/local/bin/python3.14" ] || \
+    [ -f "/usr/local/python3/bin/python3.14" ] || {
+        log_error "Python 3.14 not found in any of:"
+        log_error "  /usr/bin/python3.14"
+        log_error "  /usr/local/bin/python3.14"
+        log_error "  /usr/local/python3/bin/python3.14"
         exit 1
     }
 }
@@ -202,9 +202,22 @@ handle_upgrade() {
         echo "Backed up: .storage directory" >> "$UPGRADE_LOG"
     fi
     
-    if [ -f "/var/lib/homeassistant/matter_server/chip.json" ]; then
-        cp -a /var/lib/homeassistant/matter_server/chip.json "$BACKUP_DIR/" || true
-        echo "Backed up: chip.json" >> "$UPGRADE_LOG"
+    # matter.js server 的持久化数据：config/（fabricLabel、WiFi 凭据等）与
+    # server-<fabricid>-*/（fabric 与已配对节点）。certificates/vendors 只是 DCL
+    # 缓存快照，可自动重建，无需备份。旧 python-matter-server 的 chip.json 若仍存在
+    # 也一并备份（兼容从旧版升级的场景）。
+    if [ -d "/var/lib/homeassistant/matter_server" ]; then
+        mkdir -p "$BACKUP_DIR/matter_server"
+        for item in config server-*; do
+            if [ -e "/var/lib/homeassistant/matter_server/$item" ]; then
+                cp -a "/var/lib/homeassistant/matter_server/$item" "$BACKUP_DIR/matter_server/" 2>/dev/null || true
+                echo "Backed up: matter_server/$item" >> "$UPGRADE_LOG"
+            fi
+        done
+        if [ -f "/var/lib/homeassistant/matter_server/chip.json" ]; then
+            cp -a /var/lib/homeassistant/matter_server/chip.json "$BACKUP_DIR/matter_server/" || true
+            echo "Backed up: matter_server/chip.json (legacy)" >> "$UPGRADE_LOG"
+        fi
     fi
     
     # 记录当前已安装的包版本

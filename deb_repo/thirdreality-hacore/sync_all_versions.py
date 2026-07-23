@@ -24,10 +24,11 @@ class HomeAssistantVersionSyncer:
                 "repo": "home-assistant/core",
                 "pattern": r'export HOME_ASSISTANT_VERSION="([^"]*)"'
             },
+            # 服务端已迁移到 Node.js 的 matter.js server（npm 包名 matter-server）。
             "matter_server": {
-                "type": "github_release",
-                "repo": "home-assistant-libs/python-matter-server", 
-                "pattern": r'export MATTER_SERVER_VERSION="([^"]*)"'
+                "type": "npm_latest",
+                "package": "matter-server",
+                "pattern": r'export MATTER_SERVER_NPM_VERSION="([^"]*)"'
             },
             
             # 从 requirements.txt 获取的包
@@ -50,9 +51,11 @@ class HomeAssistantVersionSyncer:
                     "ha-silabs-firmware-client",
                     "psutil-home-assistant",
                     "python-otbr-api",
-                    "python-matter-server",
+                    "matter-python-client",
+                    "matter-ble-proxy",
                     "pyroute2", 
                     "zha",
+                    "zha-quirks",
                     "ha-ffmpeg",
                     "aiousbwatcher",
                     "async-upnp-client",
@@ -128,31 +131,20 @@ class HomeAssistantVersionSyncer:
             print(f"❌ 获取 {repo} 版本失败: {e}")
             return None
     
-    def get_matter_ota_provider_version(self, matter_server_version):
-        """根据 matter-server 版本获取对应的 ota-provider 版本"""
+    def get_npm_latest_version(self, package):
+        """从 npm registry 获取指定包的 latest 版本（matter.js server = matter-server）"""
         try:
-            dockerfile_url = f"https://raw.githubusercontent.com/home-assistant-libs/python-matter-server/{matter_server_version}/Dockerfile"
-            response = requests.get(dockerfile_url, timeout=10)
+            url = f"https://registry.npmjs.org/{package}/latest"
+            response = requests.get(url, timeout=10)
             response.raise_for_status()
-            dockerfile_content = response.text
-            # 直接匹配 releases/download/<tag>
-            match = re.search(r"matter-linux-ota-provider/releases/download/([^\s\"']+)", dockerfile_content)
-            if match:
-                ota_version = match.group(1)
-                print(f"✅ 从 matter-server Dockerfile 获取到 ota-provider 版本: {ota_version}")
-                return ota_version
-            # 兜底：取 ota-provider 最新 release
-            releases_url = "https://api.github.com/repos/home-assistant-libs/matter-linux-ota-provider/releases/latest"
-            response = requests.get(releases_url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            ota_version = data.get('tag_name', '').lstrip('v') or data.get('name', '')
-            if ota_version:
-                print(f"✅ 获取到最新 ota-provider 版本: {ota_version}")
-                return ota_version
+            version = response.json().get("version", "")
+            if version:
+                print(f"✅ 获取到 npm {package} 最新版本: {version}")
+                return version
+            print(f"❌ 无法从 npm 解析 {package} 版本")
             return None
         except Exception as e:
-            print(f"❌ 获取 ota-provider 版本失败: {e}")
+            print(f"❌ 获取 npm {package} 版本失败: {e}")
             return None
 
     def get_file_content(self, version, file_path):
@@ -232,6 +224,10 @@ class HomeAssistantVersionSyncer:
                     version = self.get_github_latest_version(package_info["repo"])
                     if version:
                         all_versions[package_name] = version
+            elif package_info["type"] == "npm_latest":
+                version = self.get_npm_latest_version(package_info["package"])
+                if version:
+                    all_versions[package_name] = version
         # 2. requirements.txt
         requirements_content = self.get_file_content(target_version, "requirements.txt")
         if requirements_content:
@@ -251,11 +247,6 @@ class HomeAssistantVersionSyncer:
             if dockerfile_package_section:
                 all_versions["dockerfile_package_section"] = dockerfile_package_section
                 all_versions["dockerfile_packages"] = self.parse_packages_from_docker_section(dockerfile_package_section)
-        # 5. OTA provider
-        if "matter_server" in all_versions:
-            ota_version = self.get_matter_ota_provider_version(all_versions["matter_server"])
-            if ota_version:
-                all_versions["ota_provider"] = ota_version
         return all_versions
     
     def backup_original_file(self):
@@ -314,18 +305,25 @@ class HomeAssistantVersionSyncer:
             updated_content = content
             updated_count = 0
             
+            # 主要版本号 -> build.sh 中的 export 变量名映射
+            main_version_vars = {
+                "home_assistant": "HOME_ASSISTANT_VERSION",
+                "matter_server": "MATTER_SERVER_NPM_VERSION",
+            }
+
             # 更新主要版本号
             for package_name, version in versions.items():
-                if package_name in ["home_assistant", "matter_server"]:
-                    pattern = rf'export {package_name.upper()}_VERSION="([^"]*)"'
+                if package_name in main_version_vars:
+                    var_name = main_version_vars[package_name]
+                    pattern = rf'export {var_name}="([^"]*)"'
                     if re.search(pattern, updated_content):
                         updated_content = re.sub(
                             pattern,
-                            f'export {package_name.upper()}_VERSION="{version}"',
+                            f'export {var_name}="{version}"',
                             updated_content
                         )
                         updated_count += 1
-                        print(f"✅ 已更新 {package_name.upper()}_VERSION: {version}")
+                        print(f"✅ 已更新 {var_name}: {version}")
                 elif package_name == "home-assistant-frontend":
                     # 特殊处理 frontend 版本
                     pattern = r'export FRONTEND_VERSION="([^"]*)"'
@@ -338,19 +336,9 @@ class HomeAssistantVersionSyncer:
                         updated_count += 1
                         print(f"✅ 已更新 FRONTEND_VERSION: {version}")
             
-            # 更新 chip_example_url
-            if "ota_provider" in versions:
-                ota_version = versions["ota_provider"]
-                pattern = r'chip_example_url="([^"]*)"'
-                if re.search(pattern, updated_content):
-                    new_url = f'chip_example_url="https://github.com/home-assistant-libs/matter-linux-ota-provider/releases/download/{ota_version}"'
-                    updated_content = re.sub(pattern, new_url, updated_content)
-                    updated_count += 1
-                    print(f"✅ 已更新 chip_example_url: {ota_version}")
-            
             # 更新 pip install 中的包版本
             for package_name, version in versions.items():
-                if package_name not in ["home_assistant", "home-assistant-frontend", "matter_server", "ota_provider", "dockerfile_package_section", "dockerfile_packages"]:
+                if package_name not in ["home_assistant", "home-assistant-frontend", "matter_server", "dockerfile_package_section", "dockerfile_packages"]:
                     # 处理带连字符的包名
                     pip_package_name = package_name.replace('_', '-')
                     pattern = rf'{pip_package_name}==([^\s]+)'
@@ -428,10 +416,6 @@ class HomeAssistantVersionSyncer:
         # Frontend 版本（从 requirements.txt 获取）
         if "home-assistant-frontend" in versions:
             print(f"    FRONTEND: {versions['home-assistant-frontend']}")
-        # OTA Provider 版本
-        if "ota_provider" in versions:
-            print("  📡 OTA Provider:")
-            print(f"    ota_provider: {versions['ota_provider']}")
         # requirements 指定包
         print("  📦 requirements 版本:")
         for name in self.package_sources["requirements_packages"]["packages"]:

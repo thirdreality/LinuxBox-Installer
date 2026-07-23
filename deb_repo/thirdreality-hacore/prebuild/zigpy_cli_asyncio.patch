@@ -1,0 +1,15 @@
+--- zigpy-cli/zigpy_cli/cli.py
++++ /srv/homeassistant/lib/python3.14/site-packages/zigpy_cli/cli.py
+@@ -16,7 +16,11 @@
+ def click_coroutine(cmd):
+     @functools.wraps(cmd)
+     def inner(*args, **kwargs):
+-        loop = asyncio.get_event_loop()
++        try:
++            loop = asyncio.get_event_loop()
++        except RuntimeError:
++            loop = asyncio.new_event_loop()
++            asyncio.set_event_loop(loop)
+         return loop.run_until_complete(cmd(*args, **kwargs))
+ 
+     return inner

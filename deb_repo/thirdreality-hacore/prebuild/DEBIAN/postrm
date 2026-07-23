@@ -25,9 +25,6 @@ cleanup_application_files() {
         rm -rf /var/lib/homeassistant/zha.conf.bak || true
     fi
     
-    # 清理临时文件
-    rm -rf /tmp/chip_kvs || true
-    
     # 清理应用目录（但保留用户数据）
     rm -rf /srv/homeassistant || true
     rm -rf /srv/matter_server || true

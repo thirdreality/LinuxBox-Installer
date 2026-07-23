@@ -36,11 +36,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-# 说明: 2.9.0 起 Music Assistant 要求 Python 3.14 (.python-version=3.14,
-# pyproject requires-python>=3.14)。本设备使用 Python 3.13，故锁定在
-# 支持 Python 3.13 的最新稳定版 2.8.9 (requires-python>=3.12,
-# classifiers 含 3.12/3.13)。升级前请确认目标版本仍兼容 Python 3.13。
-export MUSIC_ASSISTANT_VERSION="2.8.9"
+# 说明: 2.9.0 起 Music Assistant 要求 Python 3.14 (pyproject requires-python>=3.14)。
+# 设备运行时已升级到 Python 3.14.6 (thirdreality-python3 3.14.6)，因此解除 2.8.9
+# 的锁定，跟进最新稳定版 2.9.9 (2026-07-17)。
+export MUSIC_ASSISTANT_VERSION="2.9.9"
 
 version=$(grep '^Version:' ${current_dir}/prebuild/DEBIAN/control | awk '{print $2}')
 print_info "Version: $version"
@@ -103,12 +102,12 @@ CURRENT_PYTHON=$(python3 --version | sed -E 's/Python\s+//')
 if [ -f "${python3_dir}/bin/python3" ]; then
     CURRENT_PYTHON=$("${python3_dir}/bin/python3" --version | sed -E 's/Python\s+//')
 else  
-    print_error "Python 3.13+ is needed, abort ..."
+    print_error "Python 3.14+ is needed (MA >= 2.9.0), abort ..."
     exit 1  
 fi
 
-if tr_ver_lt "$CURRENT_PYTHON" "3.13.0"; then
-    print_info "Python 3.13+ is needed, abort ..."
+if tr_ver_lt "$CURRENT_PYTHON" "3.14.0"; then
+    print_info "Python 3.14+ is needed (MA >= 2.9.0, current: $CURRENT_PYTHON), abort ..."
     exit 1
 fi
 
@@ -166,8 +165,24 @@ if [ ! -e "${music_assistant_path}/bin/mass" ]; then
     }
     print_info "Downloaded requirements_all.txt successfully"
 
+    # 上游 2.9.9 的 requirements_all.txt 存在坏 pin：audible==0.10.0 的元数据要求
+    # Python <3.13，与 MA 2.9 自身 requires-python>=3.14 矛盾，会导致整个 -r 安装
+    # 被 pip 中止（0.11.0 又与 pillow==12.2.0 冲突，无法简单替换）。这里直接移除
+    # 该行预装——Audible provider 的 manifest pin ==0.10.0，在 Python 3.14 上
+    # 本就不可用（上游问题），其余 provider 不受影响。上游修复后可移除此 sed。
+    sed -i '/^audible==/d' requirements_all.txt
+
+    # usearch==2.25.3 依赖 numkong（不 pin 版本）；numkong 最新 7.7.1 未发布
+    # aarch64 wheel（上游 CI 缺失），pip 会回退源码编译并在 gcc 12 上失败
+    # （NEON dotprod intrinsics 目标选项问题）。显式 pin 到有 aarch64/cp314
+    # wheel 的 7.7.0。numkong 恢复发布 aarch64 wheel 后可移除。
+    echo "numkong==7.7.0" >> requirements_all.txt
+
     ${UV_INSTALLED_COMMAND} --find-links "https://wheels.home-assistant.io/musllinux/" \
-                -r requirements_all.txt
+                -r requirements_all.txt || {
+        print_error "Failed to install requirements_all.txt"
+        exit 1
+    }
 
     # 下载并安装 music-assistant wheel 文件
     wheel_url="https://github.com/music-assistant/server/releases/download/${MUSIC_ASSISTANT_VERSION}/music_assistant-${MUSIC_ASSISTANT_VERSION}-py3-none-any.whl"
@@ -188,9 +203,17 @@ if [ ! -e "${music_assistant_path}/bin/mass" ]; then
     print_info "Downloaded music-assistant wheel successfully"
     
     print_info "Installing music-assistant from local wheel file ..."
-    ${UV_INSTALLED_COMMAND} --no-cache --link-mode=copy \
-            --find-links "https://wheels.home-assistant.io/musllinux/" \
-            "${wheel_file}"
+    # 注意: --link-mode=copy 是 uv 专属参数，pip 不支持；按工具区分并强制失败中断
+    # （此前 pip 路径下该步骤静默失败，会打出缺 music-assistant 本体的坏包）。
+    if [ $UV_INSTALLED == true ]; then
+        ${UV_INSTALLED_COMMAND} --no-cache --link-mode=copy \
+                --find-links "https://wheels.home-assistant.io/musllinux/" \
+                "${wheel_file}" || { print_error "Failed to install music-assistant wheel"; exit 1; }
+    else
+        ${UV_INSTALLED_COMMAND} --no-cache-dir \
+                --find-links "https://wheels.home-assistant.io/musllinux/" \
+                "${wheel_file}" || { print_error "Failed to install music-assistant wheel"; exit 1; }
+    fi
     
     # 清理下载的 wheel 文件
     rm -f "${wheel_file}"

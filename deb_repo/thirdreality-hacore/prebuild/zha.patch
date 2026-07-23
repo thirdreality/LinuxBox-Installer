@@ -1,14 +1,14 @@
---- ./zha-0.0.60/zha/application/const.py	2025-06-13 18:12:56.000000000 +0000
-+++ /srv/homeassistant/lib/python3.13/site-packages/zha/application/const.py	2025-07-01 07:36:59.449565621 +0000
+--- ./zha-2.0.0/zha/application/const.py
++++ /srv/homeassistant/lib/python3.14/site-packages/zha/application/const.py
 @@ -12,6 +12,7 @@
- import zigpy_xbee.zigbee.application
  import zigpy_zigate.zigbee.application
+ import zigpy_ziggurat.zigbee.application
  import zigpy_znp.zigbee.application
 +import zigpy_blz.zigbee.application
  
  ATTR_ACTIVE_COORDINATOR = "active_coordinator"
  ATTR_ARGS = "args"
-@@ -122,6 +123,10 @@
+@@ -123,6 +124,10 @@
          "XBee = Digi XBee Zigbee radios: Digi XBee Series 2, 2C, 3",
          zigpy_xbee.zigbee.application.ControllerApplication,
      )
