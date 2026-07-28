@@ -35,7 +35,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2026.7.3"
+export HOME_ASSISTANT_VERSION="2026.7.4"
 
 #home-assistant-frontend==20250509.0
 export FRONTEND_VERSION="20260624.6" 
@@ -47,7 +47,7 @@ export MATTER_BLE_PROXY_VERSION="0.7.1"
 
 # 服务端已从 python-matter-server[server] 迁移到 Node.js 的 matter.js server
 # (npm 包名 matter-server)。系统（armbian/buildroot）自带 Node.js 24.x。
-export MATTER_SERVER_NPM_VERSION="1.2.8"
+export MATTER_SERVER_NPM_VERSION="1.3.1"
 # 允许离线/局域网环境覆盖 npm 源（例如内网 registry 或 npmmirror 镜像）。
 # 只有外网不通、但内网有镜像时设置它即可；已安装则完全不联网。
 NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-}"
@@ -131,10 +131,11 @@ if [ -z "$HOME_ASSISTANT_VERSION" ] || [ -z "$FRONTEND_VERSION" ] || [ -z "$MATT
     exit 1
 fi
 
-if [ ! -e "${home_assistant_path}/bin/hass" ] || [ ! -e "${matter_server_entry}" ]; then
-    # 进入实际装包前：停无关服务 + 按需加 swap（结束自动清理/恢复）
-    tr_build_guard_start
-fi
+# 进入实际装包前：停无关服务 + 按需加 swap（结束自动清理/恢复）。
+# 无论是新建 venv/matter，还是 venv 已存在时的“纯重打包”路径，dpkg-deb 的 xz
+# 压缩在这台 2GiB 机器上同样会把内存撑爆（曾多次 OOM 死机）。因此无条件调用，
+# 由 tr_build_guard_start 内部判断内存是否充足（够则自动跳过加 swap）。
+tr_build_guard_start
 
 if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     print_info "[1]Building python homeassistant venv for hacore_${version}.deb ..."
