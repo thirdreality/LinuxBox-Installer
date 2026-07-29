@@ -19,6 +19,34 @@ SCRIPT="R3"
 print_info() { echo -e "\e[1;34m[${SCRIPT}] INFO:\e[0m $1"; }
 print_error() { echo -e "\e[1;31m[${SCRIPT}] ERROR:\e[0m $1"; }
 
+# 幂等打补丁：仅当补丁尚未应用（sentinel 不存在）时才 patch。
+# 这样无论“首次建 venv”还是“venv 已存在的纯重打包/原地升级后”都能保证补丁在位。
+# 背景：HA 原地 pip 升级会重装 zha 等包、覆盖已打补丁的文件，若只在建 venv 时打补丁
+# 会静默丢失（真机遇到 RadioType KeyError: 'blz'）。
+# 用法: tr_apply_patch_idempotent <target_file> <patch_file> <sentinel_string>
+tr_apply_patch_idempotent() {
+    local target="$1" patchfile="$2" sentinel="$3"
+    if [ ! -f "$patchfile" ]; then
+        print_info "patch not found, skip: $patchfile"
+        return 0
+    fi
+    if [ ! -f "$target" ]; then
+        print_error "patch target not found, skip: $target"
+        return 0
+    fi
+    if [ -n "$sentinel" ] && grep -q -- "$sentinel" "$target"; then
+        print_info "patch already applied (found '$sentinel'), skip: $(basename "$patchfile")"
+        return 0
+    fi
+    if patch "$target" < "$patchfile"; then
+        print_info "patch applied: $(basename "$patchfile")"
+        # 清除对应 pyc 缓存，避免旧字节码覆盖补丁效果
+        find "$(dirname "$target")/__pycache__" -maxdepth 1 -name "$(basename "${target%.py}").*.pyc" -delete 2>/dev/null || true
+    else
+        print_error "patch FAILED: $(basename "$patchfile") -> $target"
+    fi
+}
+
 print_info "Build script for ThirdReality Home Assistant Core"
 print_info "Usage: Build.sh [--rebuild] [--clean]"
 print_info "Options:"
@@ -243,61 +271,34 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     cd ${home_assistant_path}/lib64/python3.14/site-packages; ${UV_INSTALLED_COMMAND} git+https://github.com/thirdreality/zigpy-blz/@main
 
     
-    # Apply patches
-    print_info "Applying patches..."
-    
-    # Apply zha.patch
-    if [ -f "${current_dir}/prebuild/zha.patch" ]; then
-        print_info "Applying zha.patch to const.py..."
-        if [ -f "${home_assistant_path}/lib64/python3.14/site-packages/zha/application/const.py" ]; then
-            if patch ${home_assistant_path}/lib64/python3.14/site-packages/zha/application/const.py < "${current_dir}/prebuild/zha.patch"; then
-                print_info "zha.patch applied successfully"
-            else
-                print_error "Failed to apply zha.patch, continuing without patch"
-            fi
-        else
-            print_error "Target file const.py not found, skipping zha.patch"
-        fi
-    else
-        print_info "zha.patch not found in ${current_dir}/prebuild, skipping"
-    fi
-    
-    # Apply zigpy_cli.patch
-    if [ -f "${current_dir}/prebuild/zigpy_cli.patch" ]; then
-        print_info "Applying zigpy_cli.patch to zigpy_cli..."
-        if [ -f "${home_assistant_path}/lib64/python3.14/site-packages/zigpy_cli/const.py" ]; then
-            if patch ${home_assistant_path}/lib64/python3.14/site-packages/zigpy_cli/const.py < "${current_dir}/prebuild/zigpy_cli.patch"; then
-                print_info "zigpy_cli.patch applied successfully"
-            else
-                print_error "Failed to apply zigpy_cli.patch, continuing without patch"
-            fi
-        else
-            print_error "Target directory zigpy_cli not found, skipping zigpy_cli.patch"
-        fi
-    else
-        print_info "zigpy_cli.patch not found in ${current_dir}/prebuild, skipping"
-    fi
-
-    # Apply zigpy_cli_asyncio.patch
-    # Python 3.14 移除了 asyncio.get_event_loop() 在无运行 loop 时自动创建的旧行为，
-    # 会直接抛 RuntimeError，导致 zigpy-cli 的 `zigpy radio ... info` 等命令全部崩溃
-    # （zigpy_help.sh / home_assistant_init.sh 均依赖它）。此补丁改为无 loop 时新建。
-    if [ -f "${current_dir}/prebuild/zigpy_cli_asyncio.patch" ]; then
-        print_info "Applying zigpy_cli_asyncio.patch to zigpy_cli/cli.py..."
-        if [ -f "${home_assistant_path}/lib64/python3.14/site-packages/zigpy_cli/cli.py" ]; then
-            if patch ${home_assistant_path}/lib64/python3.14/site-packages/zigpy_cli/cli.py < "${current_dir}/prebuild/zigpy_cli_asyncio.patch"; then
-                print_info "zigpy_cli_asyncio.patch applied successfully"
-            else
-                print_error "Failed to apply zigpy_cli_asyncio.patch, continuing without patch"
-            fi
-        else
-            print_error "Target file zigpy_cli/cli.py not found, skipping zigpy_cli_asyncio.patch"
-        fi
-    else
-        print_info "zigpy_cli_asyncio.patch not found in ${current_dir}/prebuild, skipping"
-    fi
-
+    # 注意：补丁的实际应用已移动到 venv/matter 安装块之后、以幂等方式无条件执行
+    # （见下方 tr_apply_patch_idempotent 调用），确保原地升级重装 zha 等包后补丁不丢失。
     deactivate
+fi
+
+# ---------------------------------------------------------------------------
+# 应用补丁（幂等，每次构建都校验）。
+# 必须在 venv 块之后无条件执行：HA 原地 pip 升级会重装 zha 覆盖补丁文件，
+# 若只在“首次建 venv”时打补丁，升级/纯重打包路径会静默丢失（真机 KeyError: 'blz'）。
+# ---------------------------------------------------------------------------
+if [ -e "${home_assistant_path}/bin/hass" ]; then
+    SITE_PACKAGES="${home_assistant_path}/lib64/python3.14/site-packages"
+    print_info "Applying patches (idempotent) ..."
+    # zha.patch: 向 RadioType 注册 blz (Bouffalo Lab Zigbee) 电台
+    tr_apply_patch_idempotent \
+        "${SITE_PACKAGES}/zha/application/const.py" \
+        "${current_dir}/prebuild/zha.patch" \
+        "zigpy_blz"
+    # zigpy_cli.patch: 向 zigpy-cli 的 radio 类型表注册 blz
+    tr_apply_patch_idempotent \
+        "${SITE_PACKAGES}/zigpy_cli/const.py" \
+        "${current_dir}/prebuild/zigpy_cli.patch" \
+        "zigpy_blz"
+    # zigpy_cli_asyncio.patch: 修复 Python 3.14 移除 asyncio.get_event_loop() 自动建 loop 的行为
+    tr_apply_patch_idempotent \
+        "${SITE_PACKAGES}/zigpy_cli/cli.py" \
+        "${current_dir}/prebuild/zigpy_cli_asyncio.patch" \
+        "asyncio.new_event_loop"
 fi
 
 # matter.js server (Node.js) —— 官方 Matter Server add-on 使用的服务端实现，

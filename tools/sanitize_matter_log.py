@@ -22,6 +22,12 @@ REPLACEMENTS = {
     # BLE peripheral MAC addresses
     "D2:1F:41:BC:D8:AC": "AA:AA:AA:AA:AA:AA",
     "C5:F1:F7:7D:F8:12": "BB:BB:BB:BB:BB:BB",
+    # BLE peripheral MAC addresses (2026-07-29 success run)
+    "D4:8C:B5:EE:05:99": "CC:CC:CC:CC:CC:CC",
+    "E6:6A:FE:3A:65:58": "DD:DD:DD:DD:DD:DD",
+    # Router BSSID (Wi-Fi scan result) + device operational IP
+    "423cba0f2d2f": "<ROUTER_BSSID_REDACTED>",
+    "192.168.66.184": "<DEVICE_IP_REDACTED>",
     # Attestation challenge (ephemeral session secret)
     "31b62683fabf643d68b47bc848d8023c": "<ATTEST_CHALLENGE_REDACTED>",
 }

@@ -12,3 +12,8 @@ deb_repo/thirdreality-otbr-agent/ot-br-posix/
 
 # Temporary swapfile created by build_common.sh (shared low-memory OOM guard)
 deb_repo/*/.build-swap
+
+# Raw (un-sanitized) matter-server logs — may contain Wi-Fi credentials / IPK.
+# Only the *_sanitized.log variants are safe to commit.
+*.raw.log
+core_matter_server_*.log
