@@ -418,11 +418,14 @@ def main():
         success = True
         print("ZHA configuration completed successfully")
 
-        # Stop and disable zigbee2mqtt and mosquitto services (if they exist)
+        # ZHA 模式下只需停用 zigbee2mqtt（Zigbee 由 ZHA 接管）。
+        # 不要动 mosquitto：它是通用 MQTT broker，可能被 MQTT 集成或其它设备使用，
+        # 且 zigbee-mqtt 的 post-fix 在 ZHA 模式也会显式保持 mosquitto 运行
+        # （"needed for other services"）。此前一并 disable mosquitto 会在安装期
+        # 造成不必要的 MQTT 中断，并与 post-fix 行为相互打架。
         stop_and_disable_service('zigbee2mqtt.service')
-        stop_and_disable_service('mosquitto.service')
 
-        print("Note: zigbee2mqtt.service and mosquitto.service have been stopped and disabled if they existed")
+        print("Note: zigbee2mqtt.service has been stopped and disabled if it existed (mosquitto left untouched)")
         
     except ConfigError as e:
         print(f"Configuration error: {e}")
