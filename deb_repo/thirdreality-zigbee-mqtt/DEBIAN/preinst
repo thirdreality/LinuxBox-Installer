@@ -3,9 +3,15 @@
 set -e
 
 
-if [[ "$(/usr/bin/systemctl is-active mosquitto.service)" == "active" ]]; then
-    echo "Stopping mosquitto.service"
-    /usr/bin/systemctl stop mosquitto.service
+# z2m 的 deb 不包含 mosquitto 的文件；已安装的 mosquitto 也不会被重装
+# （见 post-fix 的 install_mosquitto_packages），因此已安装时停 mosquitto 纯属
+# 多余，还会导致安装 z2m 时 MQTT 中断。仅当 mosquitto 尚未安装（将由 post-fix
+# 首次安装）时才需要停，避免文件锁。
+if ! dpkg-query -W -f='${Status}' mosquitto 2>/dev/null | grep -q "install ok installed"; then
+    if [[ "$(/usr/bin/systemctl is-active mosquitto.service)" == "active" ]]; then
+        echo "Stopping mosquitto.service"
+        /usr/bin/systemctl stop mosquitto.service
+    fi
 fi
 
 if [[ "$(/usr/bin/systemctl is-active zigbee2mqtt.service)" == "active" ]]; then

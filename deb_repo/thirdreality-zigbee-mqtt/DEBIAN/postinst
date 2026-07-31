@@ -15,8 +15,12 @@ LOG_FILE="/var/log/thirdreality-zigbee-mqtt-install.log"
 fix_manual_install() {
     echo "Installing zigbee2mqtt files..."
     
-    if [[ "$(/usr/bin/systemctl is-active mosquitto.service)" == "active" ]]; then
-        systemctl stop mosquitto.service >/dev/null || true
+    # 已安装的 mosquitto 不会被重装（见 post-fix install_mosquitto_packages），
+    # 且 z2m 的 deb 不含 mosquitto 文件，因此已安装时无需停 mosquitto，避免中断。
+    if ! dpkg-query -W -f='${Status}' mosquitto 2>/dev/null | grep -q "install ok installed"; then
+        if [[ "$(/usr/bin/systemctl is-active mosquitto.service)" == "active" ]]; then
+            systemctl stop mosquitto.service >/dev/null || true
+        fi
     fi
 
     if [[ "$(/usr/bin/systemctl is-active zigbee2mqtt.service)" == "active" ]]; then

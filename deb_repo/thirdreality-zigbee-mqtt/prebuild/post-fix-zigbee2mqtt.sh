@@ -270,7 +270,12 @@ stop_services() {
         log "zigbee2mqtt.service is not active"
     fi
     
-    if systemctl is-active --quiet mosquitto.service 2>/dev/null; then
+    # 仅当 mosquitto 尚未安装（下面 install_mosquitto_packages 将首次安装它、
+    # 需要释放文件锁）时才停止。若 mosquitto 已安装（例如系统镜像预置），
+    # 安装会被跳过，停它只会造成不必要的 MQTT 中断，故保持运行。
+    if dpkg-query -W -f='${Status}' mosquitto 2>/dev/null | grep -q "install ok installed"; then
+        log "mosquitto already installed; keeping it running (no package replacement needed)"
+    elif systemctl is-active --quiet mosquitto.service 2>/dev/null; then
         log "mosquitto.service is currently active, stopping..."
         systemctl stop mosquitto.service 2>&1 | tee -a "$LOG_FILE" || log "WARNING: Failed to stop mosquitto.service"
         sleep 1
