@@ -222,10 +222,12 @@ print_info "syncing DEBIAN ..."
 rm -rf ${output_dir}/DEBIAN > /dev/null 2>&1
 cp ${current_dir}/DEBIAN ${output_dir}/ -R
 
-if [ ! -d "/opt/zigbee2mqtt" ]; then
-    # 进入 pnpm 重构建前：停无关服务 + 按需加 swap（结束自动清理/恢复）
-    tr_build_guard_start
+# 进入重构建/重打包前：停无关服务 + 按需加 swap（结束自动清理/恢复）。
+# 无论 pnpm 全量构建，还是 /opt 已存在时的纯重打包，dpkg-deb 的 xz 压缩在这台
+# 2GiB 机器上都可能 OOM，故无条件调用（内存充足时内部自动跳过加 swap）。
+tr_build_guard_start
 
+if [ ! -d "/opt/zigbee2mqtt" ]; then
     cp ${current_dir}/prebuild/zigbee2mqtt.service /etc/systemd/system/zigbee2mqtt.service
 
     print_info "Build zigbee-herdsman ..."
