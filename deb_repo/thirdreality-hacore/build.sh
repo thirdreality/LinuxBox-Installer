@@ -63,19 +63,19 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2026.7.4"
+export HOME_ASSISTANT_VERSION="2026.8.0"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20260624.6" 
+export FRONTEND_VERSION="20260729.5" 
 
 # HA 2026.7 起，matter 集成的客户端库从 python-matter-server 改名拆分为
 # matter-python-client + matter-ble-proxy（见 core matter/manifest.json）。
-export MATTER_PYTHON_CLIENT_VERSION="0.7.1"
+export MATTER_PYTHON_CLIENT_VERSION="1.3.0"
 export MATTER_BLE_PROXY_VERSION="0.7.1"
 
 # 服务端已从 python-matter-server[server] 迁移到 Node.js 的 matter.js server
 # (npm 包名 matter-server)。系统（armbian/buildroot）自带 Node.js 24.x。
-export MATTER_SERVER_NPM_VERSION="1.3.1"
+export MATTER_SERVER_NPM_VERSION="1.3.3"
 # 允许离线/局域网环境覆盖 npm 源（例如内网 registry 或 npmmirror 镜像）。
 # 只有外网不通、但内网有镜像时设置它即可；已安装则完全不联网。
 NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-}"
@@ -208,7 +208,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     
     # homeassistant.components.matter
     # HA 2026.7 起 matter 集成客户端库改名拆分（服务端改用 Node.js matter.js server）。
-    ${UV_INSTALLED_COMMAND} matter-python-client==0.7.1 matter-ble-proxy==0.7.1
+    ${UV_INSTALLED_COMMAND} matter-python-client==1.3.0 matter-ble-proxy==0.7.1
 
     # homeassistant.components.thread
     ${UV_INSTALLED_COMMAND} python-otbr-api==2.10.0 pyroute2==0.9.6
@@ -216,7 +216,7 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     # homeassistant.components.zha
     # 注意：zha 2.0.0 依赖 zigpy 2.0.0，而 zigpy 2.0.0 要求 serialx>=1.4.0（旧的 0.6.2 会冲突）。
     # zha-quirks 是 zha 运行期必需（旧流程靠首启预热补装），这里显式固定以便一次装全。
-    ${UV_INSTALLED_COMMAND} zha==2.0.0 zha-quirks==2.1.1 serialx==1.8.2
+    ${UV_INSTALLED_COMMAND} zha==2.1.0 zha-quirks==2.2.0 serialx==1.8.2
 
     # zigpy-cli 默认会拉入 zigpy-zboss，而 zigpy-zboss (2.0.3) 约束 zigpy<2，与 HA 2026.7
     # 的 zha 2.0.0（需 zigpy 2.0）冲突，会导致 zha 装不上。我们不支持 zboss 无线，
