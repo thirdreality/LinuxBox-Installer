@@ -63,10 +63,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2026.8.0"
+export HOME_ASSISTANT_VERSION="2026.8.3"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20260729.5" 
+export FRONTEND_VERSION="20260729.7" 
 
 # HA 2026.7 起，matter 集成的客户端库从 python-matter-server 改名拆分为
 # matter-python-client + matter-ble-proxy（见 core matter/manifest.json）。
@@ -75,7 +75,7 @@ export MATTER_BLE_PROXY_VERSION="0.7.1"
 
 # 服务端已从 python-matter-server[server] 迁移到 Node.js 的 matter.js server
 # (npm 包名 matter-server)。系统（armbian/buildroot）自带 Node.js 24.x。
-export MATTER_SERVER_NPM_VERSION="1.3.3"
+export MATTER_SERVER_NPM_VERSION="1.4.0"
 # 允许离线/局域网环境覆盖 npm 源（例如内网 registry 或 npmmirror 镜像）。
 # 只有外网不通、但内网有镜像时设置它即可；已安装则完全不联网。
 NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-}"
