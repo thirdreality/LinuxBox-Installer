@@ -1,0 +1,23 @@
+--- a/matter_ble_proxy/client.py	2026-09-02 03:35:04.368001934 +0000
++++ b/matter_ble_proxy/client.py	2026-09-02 03:40:23.776315177 +0000
+@@ -439,7 +439,20 @@
+         conn = ConnectionState(client, handle)
+         self._connections[handle] = conn
+ 
++        # bleak's BlueZ backend defaults mtu_size to 23 unless the negotiated ATT MTU
++        # is explicitly acquired. Reporting 23 forces matter.js to fragment BTP into
++        # 20-byte segments, so large reads (e.g. networkCommissioning after
++        # addOrUpdateWiFiNetwork) need many GATT writes and can stall/drop the link on
++        # low-end peripherals. Acquire the real MTU once so BTP can use larger segments.
++        try:
++            backend = getattr(client, "_backend", None)
++            if backend is not None and hasattr(backend, "_acquire_mtu"):
++                await backend._acquire_mtu()
++        except Exception:
++            _LOGGER.warning("acquire MTU failed; falling back to default", exc_info=True)
++
+         mtu = getattr(client, "mtu_size", 23)
++        _LOGGER.info("Connected %s handle=%d negotiated ATT MTU=%d", address, handle, mtu)
+         await self._send_success(cmd_id, {"connection_handle": handle, "mtu": mtu})
+ 
+     async def _handle_disconnect(self, cmd_id: int, args: dict[str, Any]) -> None:

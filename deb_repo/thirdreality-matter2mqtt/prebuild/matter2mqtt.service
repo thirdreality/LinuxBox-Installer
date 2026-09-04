@@ -1,0 +1,25 @@
+[Unit]
+Description=ThirdReality matter2mqtt (matter.js server + MQTT bridge, no Home Assistant)
+Documentation=https://github.com/thirdreality
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/matter2mqtt
+Environment=PATH=/usr/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin:/bin
+Environment=NODE_ENV=production
+ExecStartPre=/bin/sleep 5
+# BLE commissioning is provided by the standalone matter-ble-proxy.service (bleak/BlueZ),
+# which coexists with bluetoothd -- same approach as the proven python-matter-server.
+# We use --ble-proxy (not the raw-HCI noble backend), so we never need to own hci0.
+# --mqtt-url enables the fork's native MQTT bridge (zigbee2mqtt-style topics under the
+# default matter2mqtt prefix); remove the option to disable MQTT.
+ExecStart=/usr/bin/node --enable-source-maps /opt/matter2mqtt/node_modules/matter-server/dist/esm/MatterServer.js --storage-path /var/lib/matter2mqtt --port 5580 --vendorid 4939 --fabricid 2 --ble-proxy --enable-test-net-dcl --mqtt-url mqtt://thirdreality:thirdreality@127.0.0.1:1883 --log-level info --log-file /var/lib/matter2mqtt/matter2mqtt.log
+Restart=on-failure
+RestartSec=15
+StartLimitInterval=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

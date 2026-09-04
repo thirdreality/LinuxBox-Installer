@@ -1,0 +1,21 @@
+[Unit]
+Description=matter2mqtt BLE proxy (BlueZ/bleak provider for matter2mqtt /ble; no Home Assistant)
+Documentation=https://github.com/home-assistant-libs/python-matter-server
+After=matter2mqtt.service bluetooth.service
+Wants=matter2mqtt.service
+# Belongs in [Unit]; it was silently ignored in [Service] (systemd logged a warning)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Standalone BLE backend for the --ble-proxy mode of matter2mqtt.service. Uses its own
+# venv (aiohttp + bleak + matter-ble-proxy, built with thirdreality-python3), independent
+# of Home Assistant, and coexists with bluetoothd. matter2mqtt needs a few seconds to open
+# :5580/ble; if not up yet this exits and Restart retries until it connects.
+ExecStartPre=/bin/sleep 8
+ExecStart=/opt/matter2mqtt/ble-venv/bin/matter-ble-proxy --server ws://127.0.0.1:5580/ble --log-level INFO
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

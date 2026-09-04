@@ -1,0 +1,27 @@
+--- a/dist/esm/peer/ControllerCommissioningFlow.js	1985-10-26 08:15:00.000000000 +0000
++++ b/dist/esm/peer/ControllerCommissioningFlow.js	2026-09-04 06:50:25.982558647 +0000
+@@ -1258,19 +1258,11 @@
+         throw new WifiNetworkSetupFailedError(`Commissionee did not return network index`);
+       }
+       logger.debug(`Commissionee added WiFi network ${wifiNetwork.wifiSsid} with network index ${networkIndex}`);
+-      const [updatedNetworks] = await this.#readConcreteAttributeValues(
+-        Read(
+-          Read.Attribute({
+-            endpoint: RootEndpointNumber,
+-            cluster: NetworkCommissioning,
+-            attributes: ["networks"]
+-          })
+-        )
+-      );
+-      if (updatedNetworks[networkIndex] === void 0) {
+-        throw new WifiNetworkSetupFailedError(`Commissionee did not return network with index ${networkIndex}`);
+-      }
+-      return updatedNetworks[networkIndex];
++      // TR-PATCH: skip the follow-up networks read. WiFi NetworkID === SSID per Matter spec, and
++      // fragile firmware stops serving GATT ~5s after addOrUpdateWiFiNetwork; spend the remaining
++      // window on connectNetwork instead of a redundant read.
++      logger.warn(`TR-PATCH active: skipping networks read, using SSID as networkId`);
++      return { networkId: ssid, connected: false };
+     });
+     if (addResult.transportFailure) {
+       return {

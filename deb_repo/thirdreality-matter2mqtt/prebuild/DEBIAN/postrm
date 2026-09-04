@@ -1,0 +1,9 @@
+#!/bin/bash
+# thirdreality-matter2mqtt postrm
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    /usr/bin/systemctl disable matter2mqtt.service      2>/dev/null || true
+    /usr/bin/systemctl disable matter-ble-proxy.service 2>/dev/null || true
+    /usr/bin/systemctl daemon-reload 2>/dev/null || true
+fi
+exit 0

@@ -1,0 +1,35 @@
+#!/bin/bash
+# thirdreality-matter2mqtt preinst
+# matter2mqtt replaces the Home Assistant + matter-server stack. Stop & disable the old
+# services first so they don't fight over hci0 (BLE), port 5580, or the fabric storage.
+set -e
+
+for svc in home-assistant.service matter-server.service; do
+    if systemctl list-unit-files 2>/dev/null | grep -q "^${svc}"; then
+        echo "matter2mqtt: stopping/disabling old ${svc}"
+        systemctl stop "$svc" 2>/dev/null || true
+        systemctl disable "$svc" 2>/dev/null || true
+    fi
+done
+
+# Remove the old unit files + program trees. Data under /var/lib/* is left untouched on
+# purpose (old fabric/config); remove it by hand if a fully clean slate is wanted.
+rm -f  /lib/systemd/system/home-assistant.service \
+       /lib/systemd/system/matter-server.service \
+       /usr/lib/systemd/system/home-assistant.service \
+       /usr/lib/systemd/system/matter-server.service 2>/dev/null || true
+rm -rf /srv/homeassistant /srv/matter_server 2>/dev/null || true
+# matter2mqtt moved from /srv to /opt (zigbee2mqtt-style layout); clear the old program dir.
+# Data lives in /var/lib/matter2mqtt and is untouched.
+rm -rf /srv/matter2mqtt 2>/dev/null || true
+systemctl daemon-reload 2>/dev/null || true
+
+# Node.js must be system-provided and >= 22.13 (matter-server engine requirement).
+if ! command -v node >/dev/null 2>&1; then
+    echo "matter2mqtt: WARNING Node.js not found; service will not start (need >=22.13)."
+fi
+
+# mosquitto: intentionally NOT touched here — it is a shared broker; if already installed
+# we neither reinstall nor stop it.
+
+exit 0

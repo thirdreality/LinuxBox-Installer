@@ -1,0 +1,6 @@
+#!/bin/bash
+# thirdreality-matter2mqtt prerm
+set -e
+/usr/bin/systemctl stop matter-ble-proxy.service 2>/dev/null || true
+/usr/bin/systemctl stop matter2mqtt.service      2>/dev/null || true
+exit 0

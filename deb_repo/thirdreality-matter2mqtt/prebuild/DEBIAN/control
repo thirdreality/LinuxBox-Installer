@@ -1,0 +1,14 @@
+Package: thirdreality-matter2mqtt
+Version: 1.4.0-tr.1
+Section: utils
+Priority: optional
+Architecture: arm64
+Depends: thirdreality-python3
+Maintainer: guoping.liu <guoping.liu@3reality.com>
+Description: Matter-to-MQTT gateway (matter.js server 1.3.3 + MQTT bridge), no Home Assistant.
+ Exposes Matter devices, control and commissioning over MQTT. Based on matter-server
+ 1.3.3 (@matter/main 0.17.7) with @matter/mqtt 0.17.7, an mqtt bridge patch and a
+ commission bridge. Runs without Home Assistant. BLE commissioning uses a standalone
+ matter-ble-proxy venv (bleak/BlueZ, Python 3.14 from thirdreality-python3), coexisting
+ with bluetoothd. Node.js is taken from the system runtime (>=22.13). Connects to the
+ system mosquitto (provided by zigbee2mqtt / the OS); does not install or configure it.

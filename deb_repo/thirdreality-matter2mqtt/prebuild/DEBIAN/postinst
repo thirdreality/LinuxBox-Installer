@@ -1,0 +1,15 @@
+#!/bin/bash
+# thirdreality-matter2mqtt postinst
+set -e
+
+install -d -m 0700 /var/lib/matter2mqtt
+
+/usr/bin/systemctl daemon-reload
+/usr/bin/systemctl enable matter2mqtt.service      2>/dev/null || true
+/usr/bin/systemctl enable matter-ble-proxy.service 2>/dev/null || true
+
+# Best-effort start: matter2mqtt opens :5580 (+ /ble); matter-ble-proxy then connects to it.
+/usr/bin/systemctl start  matter2mqtt.service      2>/dev/null || true
+/usr/bin/systemctl start  matter-ble-proxy.service 2>/dev/null || true
+
+exit 0
