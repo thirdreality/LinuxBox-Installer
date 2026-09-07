@@ -11,7 +11,8 @@
 #   source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
 #   TR_SWAPFILE="${current_dir}/.build-swap"                # 可选，默认见下
 #   TR_MEM_SERVICES=(home-assistant.service matter-server.service \
-#                    zigbee2mqtt.service mosquitto.service music-assistant.service)
+#                    zigbee2mqtt.service mosquitto.service music-assistant.service \
+#                    matter2mqtt.service matter-ble-proxy.service)
 #   tr_build_guard_start   # 停无关服务 + 按需加 swap + 注册退出清理 trap
 #
 # 环境变量开关：
@@ -42,7 +43,8 @@ TR_STOPPED_SERVICES=()
 if [[ -z "${TR_MEM_SERVICES+x}" ]]; then
     TR_MEM_SERVICES=(home-assistant.service matter-server.service \
                      zigbee2mqtt.service mosquitto.service music-assistant.service \
-                     otbr-agent.service otbr-web.service)
+                     otbr-agent.service otbr-web.service \
+                     matter2mqtt.service matter-ble-proxy.service)
 fi
 
 tr_cleanup_swap() {

@@ -8,7 +8,8 @@ output_dir="${current_dir}/output"
 source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
 TR_SWAPFILE="${current_dir}/.build-swap"
 TR_MEM_SERVICES=(home-assistant.service matter-server.service music-assistant.service \
-                 otbr-agent.service otbr-web.service)
+                 otbr-agent.service otbr-web.service \
+                 matter2mqtt.service matter-ble-proxy.service)
 
 REBUILD=false
 CLEAN=false

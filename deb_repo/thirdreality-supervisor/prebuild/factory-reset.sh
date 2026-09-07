@@ -251,6 +251,25 @@ remove_zigbee2mqtt()
     rm -rf /etc/mosquitto > /dev/null 2>&1 || true
 }
 
+remove_matter2mqtt()
+{
+    /usr/bin/systemctl stop matter-ble-proxy.service > /dev/null 2>&1 || true
+    /usr/bin/systemctl stop matter2mqtt.service > /dev/null 2>&1 || true
+
+    /usr/bin/systemctl disable matter-ble-proxy.service > /dev/null 2>&1 || true
+    /usr/bin/systemctl disable matter2mqtt.service > /dev/null 2>&1 || true
+
+    apt-get purge -y thirdreality-matter2mqtt > /dev/null 2>&1 || true
+
+    # /opt may hold npm-runtime leftovers not owned by the package; /var/lib
+    # holds the Matter fabric credentials and commissioned-node storage and
+    # must not survive a factory reset.
+    rm -rf /opt/matter2mqtt > /dev/null 2>&1 || true
+    rm -rf /var/lib/matter2mqtt > /dev/null 2>&1 || true
+
+    systemctl daemon-reload
+}
+
 remove_openhab()
 {
     /usr/bin/systemctl stop openhab.service > /dev/null 2>&1 || true
@@ -461,6 +480,10 @@ disable_apt_auto_services
 wait_for_dpkg_lock
 
 remove_homeassistant_core
+
+# remove matter2mqtt (conflicting stack with the native matter-server; either
+# may be installed — both removals are no-ops when absent)
+remove_matter2mqtt
 
 # remove zigbee2mqtt
 if [ "$trhub_model" == "trhubv3" ]; then
