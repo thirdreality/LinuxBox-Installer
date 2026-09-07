@@ -2,9 +2,31 @@
 # thirdreality-matter2mqtt postinst
 set -e
 
+# usb-sync custom protocol: after installation the sync script re-invokes this
+# postinst with "fix-dependency" to install missing runtime dependencies.
+# thirdreality-python3 arrives via Depends + `apt-get install -f`; nothing to do.
+if [ "${1:-}" = "fix-dependency" ]; then
+    exit 0
+fi
+
 install -d -m 0700 /var/lib/matter2mqtt
 
 /usr/bin/systemctl daemon-reload
+
+# matter2mqtt and the native matter server (hacore) are conflicting stacks, like
+# zigbee2mqtt vs ZHA: both claim port 5580 and the BLE adapter. The native stack
+# takes precedence — when matter-server.service is enabled, install the files but
+# leave matter2mqtt disabled and stopped. If matter-server is disabled or absent,
+# matter2mqtt (and its BLE proxy) is enabled and started.
+if /usr/bin/systemctl is-enabled matter-server.service >/dev/null 2>&1; then
+    echo "matter-server.service is enabled; leaving matter2mqtt disabled (conflicting stacks)"
+    /usr/bin/systemctl disable matter2mqtt.service      2>/dev/null || true
+    /usr/bin/systemctl disable matter-ble-proxy.service 2>/dev/null || true
+    /usr/bin/systemctl stop    matter2mqtt.service      2>/dev/null || true
+    /usr/bin/systemctl stop    matter-ble-proxy.service 2>/dev/null || true
+    exit 0
+fi
+
 /usr/bin/systemctl enable matter2mqtt.service      2>/dev/null || true
 /usr/bin/systemctl enable matter-ble-proxy.service 2>/dev/null || true
 
