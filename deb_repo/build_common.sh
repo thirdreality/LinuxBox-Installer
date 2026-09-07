@@ -56,12 +56,30 @@ tr_cleanup_swap() {
     fi
 }
 
+# matter2mqtt 与原生 matter-server 是互斥栈（同抢 5580 端口与 BLE；enable 层互斥
+# 由各自 postinst 保证）。返回给定服务的互斥对端，无则输出空。
+tr_exclusive_peer() {
+    case "$1" in
+        matter2mqtt.service|matter-ble-proxy.service) echo "matter-server.service" ;;
+        matter-server.service) echo "matter2mqtt.service" ;;
+        *) echo "" ;;
+    esac
+}
+
 tr_restart_stopped_services() {
     if (( ${#TR_STOPPED_SERVICES[@]} > 0 )); then
         # 逆序恢复，尽量还原依赖顺序
         local i
         for (( i=${#TR_STOPPED_SERVICES[@]}-1 ; i>=0 ; i-- )); do
             local svc="${TR_STOPPED_SERVICES[$i]}"
+            # 构建/安装期间对端互斥栈可能刚被 enable（如构建后紧接 dpkg -i），
+            # 此时恢复本服务会造成双栈并存，跳过并提示。
+            local peer
+            peer=$(tr_exclusive_peer "${svc}")
+            if [[ -n "${peer}" ]] && systemctl is-enabled --quiet "${peer}" 2>/dev/null; then
+                tr_ci "跳过恢复 ${svc}: 与已启用的 ${peer} 互斥"
+                continue
+            fi
             tr_ci "恢复服务: ${svc}"
             systemctl start "${svc}" 2>/dev/null || \
                 tr_ce "恢复 ${svc} 失败，请手动: systemctl start ${svc}"
