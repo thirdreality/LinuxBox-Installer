@@ -17,3 +17,6 @@ deb_repo/*/.build-swap
 # Only the *_sanitized.log variants are safe to commit.
 *.raw.log
 core_matter_server_*.log
+# matter-server fork release tarball (built by build-tarball.sh / GitHub Release artifact)
+deb_repo/thirdreality-matter2mqtt/prebuild/matter-server-*.tgz
+deb_repo/thirdreality-matter2mqtt/prebuild/matter-server-*.tgz.sha256
