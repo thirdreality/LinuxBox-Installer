@@ -1,5 +1,5 @@
 Package: thirdreality-matter2mqtt
-Version: 1.4.0-tr.1
+Version: 1.4.0-tr.2
 Section: utils
 Priority: optional
 Architecture: arm64
