@@ -88,7 +88,9 @@ print_info "Version: $version"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "${output_dir}" > /dev/null 2>&1
-    #rm -rf ${current_dir}/*.deb > /dev/null 2>&1
+    # 同时清掉已构建的 deb(与本仓库其它包一致)。目录里残留多个 hacore_*.deb 时容易
+    # 误拷到 U 盘;hubv3-usb-sync 现在按版本取最新,但少留垃圾可以少一层风险。
+    rm -rf ${current_dir}/*.deb > /dev/null 2>&1
 
     systemctl stop home-assistant.service || true
     systemctl disable home-assistant.service || true

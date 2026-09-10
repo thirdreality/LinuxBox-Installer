@@ -15,7 +15,10 @@ ExecStartPre=/bin/sleep 5
 # We use --ble-proxy (not the raw-HCI noble backend), so we never need to own hci0.
 # --mqtt-url enables the fork's native MQTT bridge (zigbee2mqtt-style topics under the
 # default matter2mqtt prefix); remove the option to disable MQTT.
-ExecStart=/usr/bin/node --enable-source-maps /opt/matter2mqtt/node_modules/matter-server/dist/esm/MatterServer.js --storage-path /var/lib/matter2mqtt --port 5580 --vendorid 4939 --fabricid 2 --ble-proxy --enable-test-net-dcl --mqtt-url mqtt://thirdreality:thirdreality@127.0.0.1:1883 --log-level info --log-file /var/lib/matter2mqtt/matter2mqtt.log
+# --default-fabric-label pins the fabric label shown on commissioned devices to "hubv3".
+# Without it the label defaults to the Home Assistant-oriented value, so devices paired by
+# this (HA-less) gateway would still be labelled "HomeAssistant".
+ExecStart=/usr/bin/node --enable-source-maps /opt/matter2mqtt/node_modules/matter-server/dist/esm/MatterServer.js --storage-path /var/lib/matter2mqtt --port 5580 --vendorid 4939 --fabricid 2 --default-fabric-label hubv3 --ble-proxy --enable-test-net-dcl --mqtt-url mqtt://thirdreality:thirdreality@127.0.0.1:1883 --log-level info --log-file /var/lib/matter2mqtt/matter2mqtt.log
 Restart=on-failure
 RestartSec=15
 StartLimitInterval=300

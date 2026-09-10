@@ -99,7 +99,7 @@ exclude_patterns=(
 
     "zigbee-mqtt_"
     "thirdreality-bridge_"
-    "thirdreality-matter2mqtt_"
+    "matter2mqtt_"
 
     "openhab_"
     "music-assistant_"
@@ -749,6 +749,23 @@ execute_fix_dependency_if_needed() {
     fi
 }
 
+# Pick the NEWEST deb matching a glob in $WORK_DIR.
+#
+# Previously each call site did `find ... | head -n 1`, which returns whatever the
+# filesystem lists first (readdir order), not the highest version. With several versions of
+# the same package on the USB stick that silently installs an arbitrary one -- reproduced
+# with matter2mqtt_1.4.0-tr.{1,2,3}.deb, where head -n 1 selected tr.2.
+# install_deb_if_needed() cannot recover from a bad pick: it only compares the single file
+# it is handed against the installed version.
+#
+# `sort -V` orders by version rather than lexicographically (so 2.11.0 > 2.7.0 and
+# tr.10 > tr.3); verified to agree with `dpkg --compare-versions` on the version schemes
+# used in this repo. Prints nothing when no file matches.
+find_latest_deb() {
+    local pattern="$1"
+    find "$WORK_DIR" -maxdepth 1 -name "$pattern" -type f 2>/dev/null | sort -V | tail -n 1
+}
+
 install_deb_if_needed() {
     local deb_file="$1"
     local package_name="$2"
@@ -811,7 +828,7 @@ install_board_flash_debs() {
     fi
 
     # Find board_firmware deb file
-    board_firmware_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "board_firmware_*.deb" -type f | head -n 1)
+    board_firmware_deb_file=$(find_latest_deb "board_firmware_*.deb")
     
     if [ -n "$board_firmware_deb_file" ]; then
         echo "Found board firmware deb: $board_firmware_deb_file"
@@ -899,7 +916,7 @@ install_core_matter_debs() {
     # Install hacore-config
     # Check if thirdreality-hacore-config package is already installed. NOTE: This package CANNOT be upgraded!!!!
     if ! dpkg -l | grep -q "^ii\s*thirdreality-hacore-config"; then
-        hacore_config_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore-config_*.deb" -type f | head -n 1)
+        hacore_config_deb_file=$(find_latest_deb "hacore-config_*.deb")
         if [ -n "$hacore_config_deb_file" ]; then
             echo "Installing: $hacore_config_deb_file"
             if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$hacore_config_deb_file"; then
@@ -916,11 +933,11 @@ install_core_matter_debs() {
     fi
 
     # Install Python3
-    python3_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "python3_*.deb" -type f | head -n 1)
+    python3_deb_file=$(find_latest_deb "python3_*.deb")
     if [ -n "$python3_deb_file" ]; then
         install_deb_if_needed "$python3_deb_file" "thirdreality-python3"
     else
-        python3_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "python_*.deb" -type f | head -n 1)
+        python3_deb_file=$(find_latest_deb "python_*.deb")
         if [ -n "$python3_deb_file" ]; then
             install_deb_if_needed "$python3_deb_file" "thirdreality-python3"
         else
@@ -929,7 +946,7 @@ install_core_matter_debs() {
     fi
 
     # Install hacore
-    hacore_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore_*.deb" -type f | head -n 1)
+    hacore_deb_file=$(find_latest_deb "hacore_*.deb")
     if [ -n "$hacore_deb_file" ]; then
         install_deb_if_needed "$hacore_deb_file" "thirdreality-hacore"
     else
@@ -937,7 +954,7 @@ install_core_matter_debs() {
     fi
 
     # Install otbr-agent (e.g., otbr-agent_2023.07.10.deb)
-    otbr_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "otbr-agent_*.deb" -type f | head -n 1)
+    otbr_deb_file=$(find_latest_deb "otbr-agent_*.deb")
     if [ -n "$otbr_deb_file" ]; then
         install_deb_if_needed "$otbr_deb_file" "thirdreality-otbr-agent"
     else
@@ -950,7 +967,7 @@ install_core_matter_debs() {
 install_zigbee2mqtt_debs() {
     echo "Attempting to install Zigbee2MQTT debs..."
 
-    zigbee_mqtt_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "zigbee-mqtt_*.deb" -type f | head -n 1)
+    zigbee_mqtt_deb_file=$(find_latest_deb "zigbee-mqtt_*.deb")
     if [ -n "$zigbee_mqtt_deb_file" ]; then
         install_deb_if_needed "$zigbee_mqtt_deb_file" "thirdreality-zigbee-mqtt"
         # Legacy compatibility: If installation is successful, install dependencies
@@ -967,9 +984,11 @@ install_zigbee2mqtt_debs() {
 install_matter2mqtt_debs() {
     echo "Attempting to install Matter2MQTT debs..."
 
-    matter2mqtt_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "thirdreality-matter2mqtt_*.deb" -type f | head -n 1)
+    # build.sh emits matter2mqtt_<ver>.deb (repo convention: no "thirdreality-" prefix in the
+    # file name; DEBIAN/control still declares Package: thirdreality-matter2mqtt).
+    matter2mqtt_deb_file=$(find_latest_deb "matter2mqtt_*.deb")
     if [ -z "$matter2mqtt_deb_file" ]; then
-        echo "No thirdreality-matter2mqtt deb file found in $WORK_DIR" >&2
+        echo "No matter2mqtt deb file found in $WORK_DIR" >&2
         return 0
     fi
 
@@ -978,7 +997,7 @@ install_matter2mqtt_debs() {
     # drive, hacore wins and the matter2mqtt deb is treated as if absent.
     # (Its postinst additionally refuses to enable itself while
     # matter-server.service is enabled on the system.)
-    hacore_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore_*.deb" -type f | head -n 1)
+    hacore_deb_file=$(find_latest_deb "hacore_*.deb")
     if [ -n "$hacore_deb_file" ]; then
         echo "[MATTER2MQTT] hacore deb present on USB; skipping matter2mqtt installation"
         return 0
@@ -993,7 +1012,7 @@ install_matter2mqtt_debs() {
 install_thirdreality_bridge_debs() {
     echo "Attempting to install ThirdReality Bridge debs..."
 
-    bridge_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "thirdreality-bridge_*.deb" -type f | head -n 1)
+    bridge_deb_file=$(find_latest_deb "thirdreality-bridge_*.deb")
     if [ -n "$bridge_deb_file" ]; then
         install_deb_if_needed "$bridge_deb_file" "thirdreality-bridge"
         apt-get install -f > /dev/null || true
@@ -1011,7 +1030,7 @@ install_music_assistant_debs()
 {
     echo "Attempting to install Music Assistant debs..."
 
-    music_assistant_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "music-assistant_*.deb" -type f | head -n 1)
+    music_assistant_deb_file=$(find_latest_deb "music-assistant_*.deb")
     if [ -n "$music_assistant_deb_file" ]; then
         install_deb_if_needed "$music_assistant_deb_file" "thirdreality-music-assistant"
     else
@@ -1062,7 +1081,7 @@ install_linux_image_deb() {
     echo "Attempting to install linux-image kernel deb..."
 
     # Find linux-image deb file
-    linux_image_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "linux-image-current-meson64_*.deb" -type f | head -n 1)
+    linux_image_deb_file=$(find_latest_deb "linux-image-current-meson64_*.deb")
     
     if [ -n "$linux_image_deb_file" ]; then
         echo "Found linux-image deb: $linux_image_deb_file"
@@ -1146,7 +1165,7 @@ install_supervisor_deb() {
     echo "Attempting to install supervisor deb..."
 
     # Find linuxbox-supervisor deb file
-    supervisor_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "linuxbox-supervisor_*.deb" -type f | head -n 1)
+    supervisor_deb_file=$(find_latest_deb "linuxbox-supervisor_*.deb")
     
     if [ -n "$supervisor_deb_file" ]; then
         echo "Found supervisor deb: $supervisor_deb_file"
@@ -1381,26 +1400,26 @@ main_procedure()
 
         # install home-assistant-core
         is_home_assistant_running=$(systemctl is-active --quiet home-assistant.service && echo "yes" || echo "no")
-        hacore_config_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore-config_*.deb" -type f | head -n 1)
-        hacore_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "hacore_*.deb" -type f | head -n 1)
-        otbr_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "otbr-agent_*.deb" -type f | head -n 1)
+        hacore_config_deb_file=$(find_latest_deb "hacore-config_*.deb")
+        hacore_deb_file=$(find_latest_deb "hacore_*.deb")
+        otbr_deb_file=$(find_latest_deb "otbr-agent_*.deb")
 
         if [[ "$is_home_assistant_running" == "yes" || -n "$hacore_config_deb_file" || -n "$hacore_deb_file" || -n "$otbr_deb_file" ]]; then
             install_core_matter_debs
         else
             # Install Python3
-            python3_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "python3_*.deb" -type f | head -n 1)
+            python3_deb_file=$(find_latest_deb "python3_*.deb")
             if [ -n "$python3_deb_file" ]; then
                 install_deb_if_needed "$python3_deb_file" "thirdreality-python3"
             else
-                python3_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "python_*.deb" -type f | head -n 1)
+                python3_deb_file=$(find_latest_deb "python_*.deb")
                 if [ -n "$python3_deb_file" ]; then
                     install_deb_if_needed "$python3_deb_file" "thirdreality-python3"
                 fi
             fi
 
             # Install zigpy_tools
-            zigpy_tools_deb_file=$(find "$WORK_DIR" -maxdepth 1 -name "zigpy_tools_*.deb" -type f | head -n 1)
+            zigpy_tools_deb_file=$(find_latest_deb "zigpy_tools_*.deb")
             if [ -n "$zigpy_tools_deb_file" ]; then
                 install_deb_if_needed "$zigpy_tools_deb_file" "thirdreality-zigpy-tools"
             fi        

@@ -6,7 +6,16 @@
 # matter-ble-proxy venv (bleak/BlueZ, coexists with bluetoothd) using --ble-proxy mode.
 # Node comes from the system (>=22.13); mosquitto from the OS/z2m.
 
-current_dir=$(pwd)
+# Fail fast: any unguarded command failure aborts the build (genuinely optional commands are
+# marked with `|| true`). This prevents shipping a superficially-successful deb that is
+# actually missing the BLE proxy or an unapplied patch. The EXIT trap installed by
+# tr_build_guard_start still runs on abort, so temp swap is cleaned up and stopped services
+# are restored. (pipefail is intentionally NOT set to avoid surprises from `cmd | head`.)
+set -e
+
+# Resolve the package dir from the script's own location (not $PWD) so the build works no
+# matter which directory the caller runs it from.
+current_dir=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 output_dir="${current_dir}/output"
 matter2mqtt_path="/opt/matter2mqtt"
 matter_server_entry="${matter2mqtt_path}/node_modules/matter-server/dist/esm/MatterServer.js"
@@ -64,6 +73,10 @@ print_info "Version: $version"
 
 if [[ "$CLEAN" == true ]]; then
     rm -rf "${output_dir}" >/dev/null 2>&1
+    # Also drop built debs (same as the other packages in this repo). Stale debs are harmful
+    # here: hubv3-usb-sync picks a deb with `find ... | head -n 1`, i.e. by directory order,
+    # so an older leftover version can win over the current one on the USB stick.
+    rm -rf ${current_dir}/*.deb >/dev/null 2>&1
     systemctl stop    matter-ble-proxy.service matter2mqtt.service 2>/dev/null || true
     systemctl disable matter-ble-proxy.service matter2mqtt.service 2>/dev/null || true
     rm -f  /lib/systemd/system/matter2mqtt.service /lib/systemd/system/matter-ble-proxy.service \
@@ -97,7 +110,7 @@ fi
 # ---------------------------------------------------------------------------
 installed_ver=""
 if [ -e "${matter_server_entry}" ]; then
-    installed_ver=$(node -p "require('${matter2mqtt_path}/node_modules/matter-server/package.json').version" 2>/dev/null)
+    installed_ver=$(node -p "require('${matter2mqtt_path}/node_modules/matter-server/package.json').version" 2>/dev/null || true)
 fi
 if [ "$installed_ver" != "${MATTER_SERVER_VERSION}" ]; then
     print_info "[1] Installing matter-server ${MATTER_SERVER_VERSION} (found: ${installed_ver:-none}) into ${matter2mqtt_path} ..."
@@ -151,7 +164,7 @@ fi
 # ---------------------------------------------------------------------------
 # [1b] Guard assertions (run on every build, outside any skip logic).
 # ---------------------------------------------------------------------------
-installed_ver=$(node -p "require('${matter2mqtt_path}/node_modules/matter-server/package.json').version" 2>/dev/null)
+installed_ver=$(node -p "require('${matter2mqtt_path}/node_modules/matter-server/package.json').version" 2>/dev/null || true)
 if [[ "$installed_ver" != *"-tr."* ]]; then
     print_error "Installed matter-server ${installed_ver} is NOT the ThirdReality build, abort"; exit 1
 fi
@@ -168,29 +181,33 @@ print_info "matter-server ${installed_ver} verified (MQTT bridge present)"
 # ---------------------------------------------------------------------------
 tr_apply_patch_idempotent "${commissioning_flow}" \
     "${current_dir}/prebuild/matterjs_commissioning_timing.patch" "TR-PATCH"
+# Fail hard if the patch is not in place (tr_apply_patch_idempotent is best-effort and never
+# aborts on its own): a missing timing fix silently breaks WiFi commissioning on real devices.
+if ! grep -q "TR-PATCH" "${commissioning_flow}" 2>/dev/null; then
+    print_error "commissioning timing patch NOT present in ${commissioning_flow}, abort"; exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # [2b] BLE proxy venv (bleak/BlueZ). Lightweight: aiohttp + bleak + matter-ble-proxy, built
 #      with thirdreality-python3 (matter-ble-proxy requires Python >=3.12). No Home Assistant.
 # ---------------------------------------------------------------------------
 if [ ! -x "${ble_venv}/bin/matter-ble-proxy" ]; then
-    if [ -x "$PY314" ]; then
-        print_info "[2b] Creating BLE proxy venv (matter-ble-proxy==${MATTER_BLE_PROXY_VERSION}) ..."
-        "$PY314" -m venv "${ble_venv}"
-        PIP_ARGS=(--no-cache-dir --disable-pip-version-check)
-        if [ -n "$PIP_INDEX_URL" ]; then
-            print_info "pip index: ${PIP_INDEX_URL}"; PIP_ARGS+=(--index-url "$PIP_INDEX_URL")
-        else
-            # System pip.conf may point at a mirror (e.g. tuna) that does NOT carry
-            # matter-ble-proxy; default to official PyPI. Set PIP_INDEX_URL for a LAN mirror.
-            print_info "pip index: https://pypi.org/simple/ (official; mirror lacks matter-ble-proxy)"
-            PIP_ARGS+=(--index-url https://pypi.org/simple/)
-        fi
-        "${ble_venv}/bin/pip" install "${PIP_ARGS[@]}" "matter-ble-proxy==${MATTER_BLE_PROXY_VERSION}" || \
-            print_error "Failed to install matter-ble-proxy; BLE commissioning will not work"
-    else
-        print_error "thirdreality-python3 not found at ${PY314}; cannot build BLE proxy venv"
+    if [ ! -x "$PY314" ]; then
+        print_error "thirdreality-python3 not found at ${PY314}; cannot build BLE proxy venv, abort"; exit 1
     fi
+    print_info "[2b] Creating BLE proxy venv (matter-ble-proxy==${MATTER_BLE_PROXY_VERSION}) ..."
+    "$PY314" -m venv "${ble_venv}" || { print_error "failed to create BLE proxy venv, abort"; exit 1; }
+    PIP_ARGS=(--no-cache-dir --disable-pip-version-check)
+    if [ -n "$PIP_INDEX_URL" ]; then
+        print_info "pip index: ${PIP_INDEX_URL}"; PIP_ARGS+=(--index-url "$PIP_INDEX_URL")
+    else
+        # System pip.conf may point at a mirror (e.g. tuna) that does NOT carry
+        # matter-ble-proxy; default to official PyPI. Set PIP_INDEX_URL for a LAN mirror.
+        print_info "pip index: https://pypi.org/simple/ (official; mirror lacks matter-ble-proxy)"
+        PIP_ARGS+=(--index-url https://pypi.org/simple/)
+    fi
+    "${ble_venv}/bin/pip" install "${PIP_ARGS[@]}" "matter-ble-proxy==${MATTER_BLE_PROXY_VERSION}" || \
+        { print_error "Failed to install matter-ble-proxy; BLE commissioning would not work, abort"; exit 1; }
 fi
 
 # ---------------------------------------------------------------------------
@@ -202,12 +219,25 @@ fi
 #      Verified: MTU 23->247, that read 5.6s->0.24s, night light commissions.
 #      Idempotent (sentinel=_acquire_mtu) since a venv reinstall overwrites client.py.
 # ---------------------------------------------------------------------------
-ble_client_py=$(ls -d ${ble_venv}/lib/python*/site-packages/matter_ble_proxy/client.py 2>/dev/null | head -1)
+ble_client_py=$(ls -d ${ble_venv}/lib/python*/site-packages/matter_ble_proxy/client.py 2>/dev/null | head -1 || true)
 if [ -n "$ble_client_py" ] && [ -f "$ble_client_py" ]; then
     tr_apply_patch_idempotent "$ble_client_py" "${current_dir}/prebuild/matter_ble_proxy_mtu.patch" "_acquire_mtu"
 else
-    print_info "matter-ble-proxy client.py not found; skip MTU patch"
+    print_error "matter-ble-proxy client.py not found; cannot apply MTU patch, abort"; exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# [2d] BLE guard assertions (every build). Commissioning needs BOTH the proxy venv AND the
+#      MTU patch; a silent miss here breaks pairing on real hardware, so fail hard rather
+#      than package a broken deb.
+# ---------------------------------------------------------------------------
+if [ ! -x "${ble_venv}/bin/matter-ble-proxy" ]; then
+    print_error "BLE proxy binary missing: ${ble_venv}/bin/matter-ble-proxy, abort"; exit 1
+fi
+if ! grep -q "_acquire_mtu" "$ble_client_py" 2>/dev/null; then
+    print_error "MTU patch NOT present in ${ble_client_py}, abort"; exit 1
+fi
+print_info "BLE proxy verified (venv + MTU patch present)"
 
 # ---------------------------------------------------------------------------
 # [3] Install units on the build host (for local testing) + package the deb.
@@ -216,7 +246,7 @@ cp ${current_dir}/prebuild/matter2mqtt.service      /lib/systemd/system/matter2m
 cp ${current_dir}/prebuild/matter-ble-proxy.service /lib/systemd/system/matter-ble-proxy.service
 systemctl daemon-reload 2>/dev/null || true
 
-print_info "[3] Packaging thirdreality-matter2mqtt_${version}.deb ..."
+print_info "[3] Packaging matter2mqtt_${version}.deb ..."
 rm -rf ${output_dir}/opt ${output_dir}/srv ${output_dir}/lib
 mkdir -p ${output_dir}/opt ${output_dir}/lib/systemd/system
 chmod 755 ${output_dir}/opt
@@ -229,5 +259,8 @@ chmod 0755 ${output_dir}/DEBIAN/preinst ${output_dir}/DEBIAN/postinst \
 find "${output_dir}" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find "${output_dir}" -type f -name "*.pyc" -delete 2>/dev/null || true
 
-dpkg-deb --build ${output_dir} ${current_dir}/thirdreality-matter2mqtt_${version}.deb
-print_info "Build thirdreality-matter2mqtt_${version}.deb finished"
+# deb filename follows the repo convention: no "thirdreality-" prefix in the FILE name
+# (hacore_, zigbee-mqtt_, music-assistant_ ...), while DEBIAN/control keeps
+# Package: thirdreality-matter2mqtt. hubv3-usb-sync looks the file up as matter2mqtt_*.deb.
+dpkg-deb --build ${output_dir} ${current_dir}/matter2mqtt_${version}.deb
+print_info "Build matter2mqtt_${version}.deb finished"

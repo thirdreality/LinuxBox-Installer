@@ -10,9 +10,18 @@ StartLimitIntervalSec=0
 Type=simple
 # Standalone BLE backend for the --ble-proxy mode of matter2mqtt.service. Uses its own
 # venv (aiohttp + bleak + matter-ble-proxy, built with thirdreality-python3), independent
-# of Home Assistant, and coexists with bluetoothd. matter2mqtt needs a few seconds to open
-# :5580/ble; if not up yet this exits and Restart retries until it connects.
-ExecStartPre=/bin/sleep 8
+# of Home Assistant, and coexists with bluetoothd.
+#
+# Wait until matter2mqtt actually accepts connections on :5580 rather than guessing with a
+# fixed sleep. After=/Wants= only order unit *start*, not readiness: matter2mqtt itself
+# sleeps 5s and then node needs several seconds more, so the previous `sleep 8` regularly
+# expired too early -- the proxy exited, Restart=always retried every 10s, and every boot
+# left a burst of connection failures in the journal.
+# Deliberately free of '$': systemd would try to expand it as an environment variable.
+ExecStartPre=/bin/bash -c 'until (exec 3<>/dev/tcp/127.0.0.1/5580) 2>/dev/null; do sleep 2; done'
+# Bound the wait so a permanently dead matter2mqtt cannot hang the unit forever. On timeout
+# systemd fails the start and Restart retries -- roughly every 5 min instead of every 10s.
+TimeoutStartSec=300
 ExecStart=/opt/matter2mqtt/ble-venv/bin/matter-ble-proxy --server ws://127.0.0.1:5580/ble --log-level INFO
 Restart=always
 RestartSec=10
