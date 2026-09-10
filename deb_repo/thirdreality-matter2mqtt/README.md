@@ -84,16 +84,44 @@ matter-ble-proxy.service   python venv 的 matter-ble-proxy (bleak/BlueZ) ──
 
 ---
 
-## 与 hacore 的 matter-server 互斥(重要)
+## 与 hacore 栈共存(重要)
 
-matter2mqtt 与 hacore 内的原生 `matter-server` 是**互斥栈**(类似 zigbee2mqtt vs ZHA):
-都抢 5580 端口和 BLE 适配器。
+**文件层共存,运行层才互斥**:本包与 hacore(Home Assistant + 原生 `matter-server`)可以同时
+装在一台机器上,安装过程绝不改动对方。真正抢的资源是两个不同的东西,所以本包的两个服务
+**各自独立判定**:
 
-- `preinst`:安装前停并 disable `home-assistant.service` / `matter-server.service`,删旧 unit
-  与程序目录;`/var/lib/*` 数据保留。**不动 mosquitto**(共享 broker,已装不停)。
-- `postinst`:**原生栈优先**——若 `matter-server.service` 仍 enabled,则只装文件但保持
-  matter2mqtt disabled+stopped;否则 enable 并启动 matter2mqtt + matter-ble-proxy。
-- `build_common.sh` 的 `tr_exclusive_peer()` 也保证构建后恢复服务时不会把两栈同时拉起。
+| 本包的 unit | 抢的资源 | 冲突对端 | 启动条件 |
+| --- | --- | --- | --- |
+| `matter2mqtt.service` | `:5580`(+ `/ble`) | `matter-server.service` | 对端**不存在或未 enable** 时 enable + start |
+| `matter-ble-proxy.service` | BLE 适配器(bleak/BlueZ) | `home-assistant.service`(HA 自带 bleak 代理) | 对端**不存在或未 enable** 时 enable + start |
+
+- `preinst`:**什么都不动**。不停、不 disable `home-assistant.service` /
+  `matter-server.service`,不删它们的 unit,**更不删 `/srv/homeassistant`、
+  `/srv/matter_server`**——那是 hacore 的程序目录,删掉会让 dpkg 仍以为 hacore 装着而 HA 已被
+  掏空,同版本的 hacore deb 又会被 U 盘安装器判为"已最新"跳过,等于回不去。只清理本包自己的
+  历史路径 `/srv/matter2mqtt`。**不动 mosquitto**(共享 broker)。
+- `postinst`:按上表逐个 unit 决策,判据是对端的 `is-enabled` 或 `is-active`(对端仅被手工
+  `start` 也算在场,否则只会撞 `EADDRINUSE` / 抢 hci0)。不满足启动条件的那个 unit
+  **保持原状:不启动、不 enable,也不 disable**。
+- 由此有两个有用的非对称组合:HA 停用而原生 `matter-server` 仍 enabled 时,本包的 BLE 代理会
+  起来,通过 `:5580/ble` 给**原生** matter-server 补上 BLE(它同样跑 `--ble-proxy`);HA
+  enabled 而 `matter-server` 未 enable 时,matter2mqtt 起来但没有 BLE provider——上报与控制
+  正常,BLE 配网不可用。
+- 切换栈是**显式的运维动作**,包不替你做:
+
+  ```bash
+  systemctl disable --now home-assistant.service matter-server.service
+  systemctl enable  --now matter2mqtt.service matter-ble-proxy.service
+  ```
+
+  彻底换栈建议先 `dpkg -r thirdreality-hacore`,让 dpkg 状态与磁盘一致。
+- `hubv3-usb-sync.sh` 不再因为"U 盘上有 `hacore_*.deb`"而跳过本包;两个 deb 可以放同一张盘,
+  hacore 先装、matter2mqtt 后装,后者按上表自行让位。
+- `build_common.sh` 的 `tr_exclusive_peer()` 保证构建后恢复服务时不会把两栈同时拉起。
+
+> 反向场景仍有缺口:hacore 的 `postinst` 会无条件 enable + start `home-assistant.service` /
+> `matter-server.service`,且不检查 matter2mqtt。若机器上 matter2mqtt 已 enabled,再装 hacore
+> 就会两栈同时 enabled,重启后谁先起谁占住 5580,另一个反复重启。要堵住得在 hacore 侧加守卫。
 
 ---
 
@@ -153,4 +181,6 @@ output/                      构建产物工作目录(gitignore)
    敏感字段命中 0。
 4. 控制:经 MQTT 发 on/off/toggle/moveToLevel,`onOff` 状态随之变化(含无参命令)。
 5. 两个补丁仍成功应用(sentinel 命中或重新打上)。
-6. 与原生 matter-server 的互斥、mosquitto 不被误停,行为符合 `postinst`/`preinst` 预期。
+6. 与 hacore 栈的共存行为符合 `preinst`/`postinst` 预期:`/srv/homeassistant`、
+   `/srv/matter_server` 仍在,HA / 原生 matter-server 的 enabled 状态未被改动,mosquitto 未被
+   误停,两个 unit 各自按对端状态决定是否启动。

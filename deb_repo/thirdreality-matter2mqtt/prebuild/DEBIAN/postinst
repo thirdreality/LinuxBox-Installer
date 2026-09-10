@@ -13,25 +13,46 @@ install -d -m 0700 /var/lib/matter2mqtt
 
 /usr/bin/systemctl daemon-reload
 
-# matter2mqtt and the native matter server (hacore) are conflicting stacks, like
-# zigbee2mqtt vs ZHA: both claim port 5580 and the BLE adapter. The native stack
-# takes precedence — when matter-server.service is enabled, install the files but
-# leave matter2mqtt disabled and stopped. If matter-server is disabled or absent,
-# matter2mqtt (and its BLE proxy) is enabled and started.
-if /usr/bin/systemctl is-enabled matter-server.service >/dev/null 2>&1; then
-    echo "matter-server.service is enabled; leaving matter2mqtt disabled (conflicting stacks)"
-    /usr/bin/systemctl disable matter2mqtt.service      2>/dev/null || true
-    /usr/bin/systemctl disable matter-ble-proxy.service 2>/dev/null || true
-    /usr/bin/systemctl stop    matter2mqtt.service      2>/dev/null || true
-    /usr/bin/systemctl stop    matter-ble-proxy.service 2>/dev/null || true
-    exit 0
+# matter2mqtt may be installed next to the native Home Assistant + matter-server stack; the
+# files never collide. What does collide is runtime resources, and the two units of this
+# package contend for *different* ones, so each is decided on its own:
+#
+#   matter2mqtt.service      binds :5580 (+ /ble)  -> conflicts with matter-server.service
+#   matter-ble-proxy.service drives the BLE adapter -> conflicts with home-assistant.service
+#                                                      (HA runs its own bleak-based proxy)
+#
+# Rule per unit: if its conflicting peer is absent or not enabled, enable and start ours;
+# otherwise leave our unit exactly as it was -- not started, not enabled, and equally NOT
+# disabled (an operator who enabled it on purpose keeps that state).
+#
+# "Absent or not enabled" is widened to also treat a peer that is merely *running* (enabled
+# via another path, or started by hand) as present: starting ours anyway would only fail on
+# EADDRINUSE / fight over hci0.
+#
+# Note the useful asymmetry this allows: with HA gone but matter-server still enabled, the
+# BLE proxy comes up and serves the native matter-server (which also runs with --ble-proxy)
+# on :5580/ble. And with HA enabled but matter-server disabled, matter2mqtt runs without a
+# BLE provider: reporting and control work, BLE commissioning does not.
+peer_present() {
+    /usr/bin/systemctl is-enabled "$1" >/dev/null 2>&1 || \
+    /usr/bin/systemctl is-active  "$1" >/dev/null 2>&1
+}
+
+# [1] matter2mqtt.service vs the native matter server (port 5580)
+if peer_present matter-server.service; then
+    echo "matter2mqtt: matter-server.service is enabled or running; leaving matter2mqtt.service untouched (both want :5580)"
+else
+    /usr/bin/systemctl enable matter2mqtt.service 2>/dev/null || true
+    /usr/bin/systemctl start  matter2mqtt.service 2>/dev/null || true
 fi
 
-/usr/bin/systemctl enable matter2mqtt.service      2>/dev/null || true
-/usr/bin/systemctl enable matter-ble-proxy.service 2>/dev/null || true
-
-# Best-effort start: matter2mqtt opens :5580 (+ /ble); matter-ble-proxy then connects to it.
-/usr/bin/systemctl start  matter2mqtt.service      2>/dev/null || true
-/usr/bin/systemctl start  matter-ble-proxy.service 2>/dev/null || true
+# [2] matter-ble-proxy.service vs Home Assistant (BLE adapter). Started after matter2mqtt:
+# its ExecStartPre waits for :5580 to accept connections, whoever is listening there.
+if peer_present home-assistant.service; then
+    echo "matter2mqtt: home-assistant.service is enabled or running; leaving matter-ble-proxy.service untouched (both want the BLE adapter)"
+else
+    /usr/bin/systemctl enable matter-ble-proxy.service 2>/dev/null || true
+    /usr/bin/systemctl start  matter-ble-proxy.service 2>/dev/null || true
+fi
 
 exit 0
