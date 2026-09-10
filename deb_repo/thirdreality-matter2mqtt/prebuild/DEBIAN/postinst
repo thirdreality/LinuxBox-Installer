@@ -38,9 +38,22 @@ peer_present() {
     /usr/bin/systemctl is-active  "$1" >/dev/null 2>&1
 }
 
+# Note on upgrades: preinst (and the old package's prerm) stopped our units before the
+# unpack, and a unit we stand down for is NOT started again here. That is deliberate -- but
+# say so out loud when the unit is enabled, otherwise an upgrade looks like it killed a
+# service the operator had switched on. Its enable state is kept, so a reboot brings it back.
+stood_down_notice() {
+    local unit="$1" peer="$2"
+    echo "matter2mqtt: ${peer} is enabled or running; leaving ${unit} untouched (conflicting resource)"
+    if /usr/bin/systemctl is-enabled "$unit" >/dev/null 2>&1; then
+        echo "matter2mqtt: WARNING ${unit} is enabled but was NOT started, and stays stopped until"
+        echo "matter2mqtt:   ${peer} is disabled (a reboot would start both and they would clash)."
+    fi
+}
+
 # [1] matter2mqtt.service vs the native matter server (port 5580)
 if peer_present matter-server.service; then
-    echo "matter2mqtt: matter-server.service is enabled or running; leaving matter2mqtt.service untouched (both want :5580)"
+    stood_down_notice matter2mqtt.service matter-server.service
 else
     /usr/bin/systemctl enable matter2mqtt.service 2>/dev/null || true
     /usr/bin/systemctl start  matter2mqtt.service 2>/dev/null || true
@@ -49,7 +62,7 @@ fi
 # [2] matter-ble-proxy.service vs Home Assistant (BLE adapter). Started after matter2mqtt:
 # its ExecStartPre waits for :5580 to accept connections, whoever is listening there.
 if peer_present home-assistant.service; then
-    echo "matter2mqtt: home-assistant.service is enabled or running; leaving matter-ble-proxy.service untouched (both want the BLE adapter)"
+    stood_down_notice matter-ble-proxy.service home-assistant.service
 else
     /usr/bin/systemctl enable matter-ble-proxy.service 2>/dev/null || true
     /usr/bin/systemctl start  matter-ble-proxy.service 2>/dev/null || true

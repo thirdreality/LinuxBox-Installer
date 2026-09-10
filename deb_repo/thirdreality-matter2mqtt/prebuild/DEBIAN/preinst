@@ -16,6 +16,22 @@
 # left out stays exactly as it was -- not started, not enabled, not disabled.
 set -e
 
+# Stop OUR OWN services before the unpack replaces /opt/matter2mqtt (node_modules and the
+# BLE venv, ~25k files): a running node/python whose files change underneath it behaves
+# unpredictably. On a normal upgrade dpkg has already run the OLD package's prerm for this
+# (order: old-prerm upgrade -> new-preinst upgrade -> unpack -> new-postinst configure), so
+# this is a belt-and-braces repeat that also covers the cases where that did not happen --
+# a half-installed/half-configured leftover from an interrupted run, or a forced dpkg -i.
+# Idempotent and harmless on a fresh install, where neither unit exists yet.
+#
+# Deliberately `stop` only, never `disable`: postinst re-enables (and starts) a unit only
+# when its conflicting peer is absent, so disabling here would silently drop an enable state
+# an operator set on purpose. Restarting after the upgrade is postinst's decision.
+if [ -x /usr/bin/systemctl ]; then
+    /usr/bin/systemctl stop matter-ble-proxy.service 2>/dev/null || true
+    /usr/bin/systemctl stop matter2mqtt.service      2>/dev/null || true
+fi
+
 # matter2mqtt itself moved from /srv to /opt (zigbee2mqtt-style layout); clear our own stale
 # program dir. Data lives in /var/lib/matter2mqtt and is untouched.
 rm -rf /srv/matter2mqtt 2>/dev/null || true

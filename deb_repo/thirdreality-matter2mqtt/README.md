@@ -95,11 +95,12 @@ matter-ble-proxy.service   python venv 的 matter-ble-proxy (bleak/BlueZ) ──
 | `matter2mqtt.service` | `:5580`(+ `/ble`) | `matter-server.service` | 对端**不存在或未 enable** 时 enable + start |
 | `matter-ble-proxy.service` | BLE 适配器(bleak/BlueZ) | `home-assistant.service`(HA 自带 bleak 代理) | 对端**不存在或未 enable** 时 enable + start |
 
-- `preinst`:**什么都不动**。不停、不 disable `home-assistant.service` /
+- `preinst`:**对别人什么都不动**。不停、不 disable `home-assistant.service` /
   `matter-server.service`,不删它们的 unit,**更不删 `/srv/homeassistant`、
   `/srv/matter_server`**——那是 hacore 的程序目录,删掉会让 dpkg 仍以为 hacore 装着而 HA 已被
   掏空,同版本的 hacore deb 又会被 U 盘安装器判为"已最新"跳过,等于回不去。只清理本包自己的
-  历史路径 `/srv/matter2mqtt`。**不动 mosquitto**(共享 broker)。
+  历史路径 `/srv/matter2mqtt`,并 `stop`(**不 disable**)本包自己的两个服务。**不动
+  mosquitto**(共享 broker)。
 - `postinst`:按上表逐个 unit 决策,判据是对端的 `is-enabled` 或 `is-active`(对端仅被手工
   `start` 也算在场,否则只会撞 `EADDRINUSE` / 抢 hci0)。不满足启动条件的那个 unit
   **保持原状:不启动、不 enable,也不 disable**。
@@ -118,6 +119,22 @@ matter-ble-proxy.service   python venv 的 matter-ble-proxy (bleak/BlueZ) ──
 - `hubv3-usb-sync.sh` 不再因为"U 盘上有 `hacore_*.deb`"而跳过本包;两个 deb 可以放同一张盘,
   hacore 先装、matter2mqtt 后装,后者按上表自行让位。
 - `build_common.sh` 的 `tr_exclusive_peer()` 保证构建后恢复服务时不会把两栈同时拉起。
+
+### 升级(同一个包换版本)时的时序
+
+dpkg 的调用顺序是 `旧包 prerm upgrade` → `新包 preinst upgrade` → 解包 → `新包 postinst
+configure`。解包会覆盖 `/opt/matter2mqtt` 下约 2.5 万个文件(node_modules + BLE venv),**跑
+着的 node / python 被换掉文件行为不可预测**,所以解包前必须停:
+
+- 常规升级由**旧包的 `prerm`** 完成(它从第一版起就无条件 `stop` 两个服务)。
+- **新包的 `preinst` 再停一次**作为保险,覆盖 prerm 没跑到的残局(上次安装被打断留下的
+  `half-installed` / `half-configured`、`dpkg -i --force-*` 等)。幂等,首装时是 no-op。
+- 两处都只 `stop`、**绝不 `disable`**:`postinst` 只在对端不在场时才会 enable,若这里 disable
+  了,运维手工 enable 的状态会在升级中被静默丢掉。
+- 升级后由 `postinst` 按上表决定是否重新 `start`。主路径都能恢复原状(纯 matter2mqtt 机、
+  或已切换过去的机器,对端都不在场)。唯一停着不自动起的是**双栈同时 enabled 的异常态**——
+  此时不拉起更安全,`postinst` 会打印 WARNING 说明它仍是 enabled、重启后才会起来(届时会和
+  原生栈抢资源,应先 disable 一边)。
 
 > 反向场景仍有缺口:hacore 的 `postinst` 会无条件 enable + start `home-assistant.service` /
 > `matter-server.service`,且不检查 matter2mqtt。若机器上 matter2mqtt 已 enabled,再装 hacore
