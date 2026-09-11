@@ -174,6 +174,12 @@ otbr-web.service     After + BindsTo = otbr-agent.service
 4. **子模块**：`build.sh` 用 `git submodule update --init`（非 `--recursive`），当前版本
    可正常编译；若将来上游拆分出需递归的子模块，编译报缺文件时改成 `--recursive`。
 5. **串口**：`spinel+hdlc+uart:///dev/ttyAML6@115200` 是本硬件的 RCP 串口，换硬件需改。
+6. **隐患（待修，暂不处理）**：`build.sh` 用 `current_dir=$(pwd)` 取工作目录，所以
+   `output/`、`staging/`、`ot-br-posix/` 三个路径都跟着**调用者当前所在目录**走，而不是脚本
+   所在目录。因此必须 `cd` 到本包目录再 `./build.sh`；若从别处 `bash /path/to/build.sh`，
+   源码会 clone 到当时的工作目录、staging 也建在那里。同仓库的
+   `thirdreality-matter2mqtt/build.sh` 已改用
+   `$(cd "$(dirname "$(readlink -f "$0")")" && pwd)` 规避，本包待统一。
 
 ---
 

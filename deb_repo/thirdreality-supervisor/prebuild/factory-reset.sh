@@ -5,10 +5,10 @@
 
 SCRIPT="HubV3"
 
-# OTBR 老形态的 SysV 脚本(feb106c 之前;otbr-nat44 更早一代才有)
+# SysV scripts from the legacy OTBR layout (pre-feb106c; otbr-nat44 only in the earliest one)
 FIREWALL_SERVICE="/etc/init.d/otbr-firewall"
 NAT44_SERVICE="/etc/init.d/otbr-nat44"
-# OTBR 新形态的防火墙脚本(setup/teardown 由 otbr-agent.service 的 drop-in 成对调用)
+# Firewall script of the current OTBR layout (setup/teardown paired by the otbr-agent drop-in)
 OTBR_FIREWALL_SCRIPT="/usr/lib/thirdreality/otbr-firewall.sh"
 SYSCTL_ACCEPT_RA_FILE="/etc/sysctl.d/60-otbr-accept-ra.conf"
 SYSCTL_IP_FORWARD_FILE="/etc/sysctl.d/60-otbr-ip-forward.conf"
@@ -93,7 +93,7 @@ function restore_apt_auto_services() {
     for unit in "${APT_AUTO_SERVICES[@]}" "${APT_AUTO_TIMERS[@]}"; do
         systemctl unmask "$unit" >/dev/null 2>&1 || true
         systemctl enable "$unit" >/dev/null 2>&1 || true
-        # 不启动服务，因为马上就要 reboot 了
+        # Do not start the services here: a reboot is imminent anyway
         # systemctl start "$unit" >/dev/null 2>&1 || true
     done
 }
@@ -183,26 +183,26 @@ function wait_for_dpkg_lock() {
 }
 
 # ---------------------------------------------------------------------------
-# OTBR 的清理按两代形态各写一份，两份都会被调用:现网既有已经升级到"总闸模型"的机器,
-# 也有仍是老形态(otbr-agent/otbr-web 各自 enable、init.d 防火墙、外部 mDNSResponder)
-# 的机器,单靠任一份都会漏。分界线是 2026-07 的 feb106c
-# "feat(otbr-agent): Pair firewall setup/teardown and add hubv3 master switch"。
+# OTBR cleanup is written once per layout, and BOTH are called: the field has machines already
+# on the "master switch" model and machines still on the legacy one (otbr-agent/otbr-web each
+# enabled, init.d firewall, external mDNSResponder), so either one alone would miss some. The
+# dividing line is feb106c (2026-07), "Pair firewall setup/teardown and add hubv3 master switch".
 #
-# 边界原则:**当前包拥有的文件一律交给 apt-get purge 删**(unit、/usr/sbin/otbr-*、
-# /usr/share/otbr-web、/etc/default/otbr-*、/etc/sysctl.d/60-otbr-*、
-# /etc/modules-load.d/otbr.conf、/usr/lib/thirdreality/* 等)。手工删这些会造成
-# "dpkg 认为包还装着、文件却已消失"的不一致,之后同版本 deb 又会被 U 盘安装器判为
-# "已是最新"跳过,反倒修不回来。这里只手工清理**当前包不再拥有的历史孤儿文件**
-# (init.d 脚本、mDNSResponder 那一套)以及**运行期状态与全局配置**
-# (ipset/iptables、rt_tables、sysctl、/var/lib/thread)。
+# Boundary rule: files the CURRENT package owns are all left to apt-get purge (units,
+# /usr/sbin/otbr-*, /usr/share/otbr-web, /etc/default/otbr-*, /etc/sysctl.d/60-otbr-*,
+# /etc/modules-load.d/otbr.conf, /usr/lib/thirdreality/* ...). Deleting those by hand leaves
+# dpkg believing the package is installed while its files are gone, and the USB installer then
+# skips a same-version deb as "already latest", so there is no way back. What IS cleaned here
+# is only orphans the current package no longer ships (init.d scripts, the mDNSResponder set)
+# plus runtime state and global config (ipset/iptables, rt_tables, sysctl, /var/lib/thread).
 #
-# avahi 一律不碰:老形态用的是外部 mDNSResponder(mdnsd / libdns_sd / libnss_mdns),
-# 与系统 avahi-daemon 无关,后者是共享组件。
+# avahi is never touched: the legacy layout used an external mDNSResponder (mdnsd /
+# libdns_sd / libnss_mdns), unrelated to the system avahi-daemon, which is a shared component.
 # ---------------------------------------------------------------------------
 
-# 新形态(feb106c 之后):hubv3-otbr-agent 是总闸,Wants=otbr-agent(后者又 Wants=otbr-web),
-# otbr-agent 是 PartOf=hubv3、otbr-web 是 BindsTo=otbr-agent,因此只有总闸被 enable。
-# 防火墙由 otbr-agent.service 的 ExecStartPre/ExecStopPost 调 otbr-firewall.sh 成对建拆。
+# Current layout (feb106c onwards): hubv3-otbr-agent is the master switch, it Wants otbr-agent
+# (which Wants otbr-web); otbr-agent is PartOf=hubv3 and otbr-web is BindsTo=otbr-agent, so
+# only the master is enabled. The firewall is paired via otbr-agent ExecStartPre/ExecStopPost.
 function _remove_otbr_agent_current()
 {
     if ! service_exists "hubv3-otbr-agent.service" && [ ! -x "${OTBR_FIREWALL_SCRIPT}" ]; then
@@ -212,8 +212,8 @@ function _remove_otbr_agent_current()
 
     print_info "_remove_otbr_agent_current (start)"
 
-    # 先停总闸:整条链随之停止,且 otbr-agent 的 ExecStopPost 会把防火墙规则拆掉。
-    # 之后再逐个兜底,防止 unit 依赖关系已被改动。
+    # Master switch first: the whole chain follows, and otbr-agent ExecStopPost tears the
+    # firewall rules down. Then each unit individually, in case the dependencies were altered.
     /usr/bin/systemctl stop hubv3-otbr-agent > /dev/null 2>&1 || true
     /usr/bin/systemctl stop otbr-web > /dev/null 2>&1 || true
     /usr/bin/systemctl stop otbr-agent > /dev/null 2>&1 || true
@@ -224,13 +224,13 @@ function _remove_otbr_agent_current()
 
     killall otbr-web otbr-agent > /dev/null 2>&1 || true
 
-    # 兜底拆防火墙(ipset、OTBR_FORWARD_INGRESS/EGRESS 链、NAT64 的 mangle/nat/forward),
-    # 应对 ExecStopPost 没跑到的情况;脚本本身是幂等的。
+    # Fallback teardown (ipsets, the OTBR_FORWARD_INGRESS/EGRESS chains, NAT64 mangle/nat/
+    # forward) for the case where ExecStopPost never ran; the script itself is idempotent.
     if [ -x "${OTBR_FIREWALL_SCRIPT}" ]; then
         "${OTBR_FIREWALL_SCRIPT}" teardown > /dev/null 2>&1 || true
     fi
 
-    # systemd drop-in:purge 正常也会带走,这里兜底 purge 失败的情况
+    # systemd drop-ins: purge normally takes them, this is the fallback for a failed purge
     rm -f /etc/systemd/system/otbr-agent.service.d/firewall.conf > /dev/null 2>&1 || true
     rm -f /etc/systemd/system/otbr-web.service.d/ordering.conf > /dev/null 2>&1 || true
     rmdir /etc/systemd/system/otbr-agent.service.d > /dev/null 2>&1 || true
@@ -239,19 +239,19 @@ function _remove_otbr_agent_current()
     print_info "_remove_otbr_agent_current (done)"
 }
 
-# 老形态(feb106c 之前):otbr-agent / otbr-web 各自独立 enable,hubv3-otbr-agent 当时只是
-# Type=oneshot 的一次性配置脚本(2025-10 的 a1c2d36 就已存在,语义与现在的总闸不同);
-# 防火墙是 ot-br-posix 自带的 /etc/init.d/otbr-firewall,用 update-rc.d 注册。
-# 更早一代(a2266f7 之前)还有 /etc/init.d/otbr-nat44、外部 mDNSResponder 一套,以及
-# otbr-agent-init.sh 作为 ExecStartPre。这些文件新包都不再包含,属于孤儿,手工清理。
+# Legacy layout (pre-feb106c): otbr-agent / otbr-web were each enabled on their own, while
+# hubv3-otbr-agent was merely a Type=oneshot config script (it exists since a1c2d36, 2025-10,
+# with different semantics than today master switch). The firewall was ot-br-posix own
+# /etc/init.d/otbr-firewall via update-rc.d; an earlier generation also had otbr-nat44, the
+# external mDNSResponder set and otbr-agent-init.sh. None ship in the current package: orphans.
 function _remove_otbr_agent_legacy()
 {
     local found=0
     local f
-    # 探测项必须是"只有老形态才有"的文件。注意不能用 /lib/thirdreality/hubv3-otbr-agent.sh:
-    # 本系统是 usrmerge(/lib -> /usr/lib),它与新包安装的
-    # /usr/lib/thirdreality/hubv3-otbr-agent.sh 是同一个文件,拿它当老形态标志会在纯新形态
-    # 机器上恒为真,连带把新包的文件删掉,造成 dpkg 状态与磁盘不一致。
+    # Markers must be files ONLY the legacy layout has. Not /lib/thirdreality/hubv3-otbr-agent.sh:
+    # this system is usrmerge (/lib -> /usr/lib), so it is the very same file the current package
+    # installs at /usr/lib/thirdreality/hubv3-otbr-agent.sh -- using it as a legacy marker would
+    # be always true on new machines and would delete that file, desyncing dpkg from the disk.
     for f in "${FIREWALL_SERVICE}" "${NAT44_SERVICE}" /etc/init.d/mdns /etc/nss_mdns.conf \
              /etc/dbus-1/system.d/otbr-agent.conf /usr/lib/thirdreality/otbr-agent-init.sh \
              /usr/lib/libnss_mdns.so.2 \
@@ -267,14 +267,14 @@ function _remove_otbr_agent_legacy()
 
     print_info "_remove_otbr_agent_legacy (start)"
 
-    # 老形态下这两个是各自 enable 的,新形态的清理只停总闸时会漏掉它们
+    # These two were each enabled in the legacy layout; stopping only the master would miss them
     /usr/bin/systemctl stop otbr-web > /dev/null 2>&1 || true
     /usr/bin/systemctl stop otbr-agent > /dev/null 2>&1 || true
     /usr/bin/systemctl disable otbr-web > /dev/null 2>&1 || true
     /usr/bin/systemctl disable otbr-agent > /dev/null 2>&1 || true
     killall otbr-web otbr-agent > /dev/null 2>&1 || true
 
-    # init.d 防火墙 / NAT44:先按 SysV 停,再摘掉 rcX.d 注册,最后删脚本本身
+    # init.d firewall / NAT44: stop the SysV way, drop the rcX.d registration, then the scripts
     for f in otbr-firewall otbr-nat44; do
         /usr/bin/systemctl stop "$f" > /dev/null 2>&1 || true
         /usr/bin/systemctl disable "$f" > /dev/null 2>&1 || true
@@ -292,29 +292,29 @@ function _remove_otbr_agent_legacy()
     fi
     rm -f "${FIREWALL_SERVICE}" "${NAT44_SERVICE}" > /dev/null 2>&1 || true
 
-    # 外部 mDNSResponder 一套(内置 mDNS 之前的形态)。注意与 avahi 无关,不要动 avahi。
+    # The external mDNSResponder set (pre built-in mDNS). Unrelated to avahi -- leave avahi alone.
     rm -f /etc/init.d/mdns /etc/nss_mdns.conf > /dev/null 2>&1 || true
     rm -f /etc/rc2.d/S52mdns /etc/rc3.d/S52mdns /etc/rc4.d/S52mdns /etc/rc5.d/S52mdns \
           /etc/rc0.d/K16mdns /etc/rc6.d/K16mdns > /dev/null 2>&1 || true
     rm -f /usr/lib/libnss_mdns.so.2 /usr/lib/libnss_mdns-0.2.so \
           /usr/lib/libdns_sd.so /usr/lib/libdns_sd.so.1 > /dev/null 2>&1 || true
 
-    # otbr-agent 的 dbus 策略文件与老的 ExecStartPre 脚本,新包都不再安装
+    # otbr-agent dbus policy file and the old ExecStartPre script: neither ships any more
     if [ -e /etc/dbus-1/system.d/otbr-agent.conf ]; then
         rm -f /etc/dbus-1/system.d/otbr-agent.conf > /dev/null 2>&1 || true
         /usr/bin/systemctl reload dbus > /dev/null 2>&1 || true
     fi
     rm -f /usr/lib/thirdreality/otbr-agent-init.sh > /dev/null 2>&1 || true
-    # 最早一代的 hubv3-otbr-agent.sh 曾写作 /lib/thirdreality/,但 usrmerge 下它与新包的
-    # /usr/lib/thirdreality/hubv3-otbr-agent.sh 是同一个文件,所以这里不能删 ——
-    # 那属于当前包拥有的文件,交给 purge。
+    # The earliest hubv3-otbr-agent.sh was written as /lib/thirdreality/, but under usrmerge that
+    # is the same file the current package installs at /usr/lib/thirdreality/, so it must NOT be
+    # deleted here -- it belongs to the current package and is left to purge.
 
     print_info "_remove_otbr_agent_legacy (done)"
 }
 
-# 对外入口:两代形态都清,然后 purge 包、收尾全局配置。
-# 独立于 remove_homeassistant_core 调用 —— 以前它被塞在那个函数里,而那个函数在
-# home-assistant.service 不存在时直接 return,导致没装 HA 的机器上 OTBR 永远清不掉。
+# Entry point: clean both layouts, then purge the package and finish off the global config.
+# Called independently of remove_homeassistant_core -- it used to live inside that function,
+# which returns early without home-assistant.service, so OTBR was never cleaned on HA-less boxes.
 remove_otbr_agent()
 {
     print_info "remove_otbr_agent (start)"
@@ -322,15 +322,15 @@ remove_otbr_agent()
     _remove_otbr_agent_current
     _remove_otbr_agent_legacy
 
-    # 包自己的 prerm 才是权威拆除逻辑(停总闸、拆防火墙、删 drop-in、清 rt_tables/sysctl.d、
-    # 删 /var/lib/thread),所以先让 purge 跑。失败只告警,不手工删包文件。
+    # The package own prerm is the authoritative teardown (stop the master, tear down the
+    # firewall, drop-ins, rt_tables/sysctl.d, /var/lib/thread), so purge runs first; warn on failure.
     if dpkg -l 2>/dev/null | grep -q "^ii[[:space:]]*thirdreality-otbr-agent"; then
         apt-get purge -y thirdreality-otbr-agent > /dev/null 2>&1 || \
             print_error "purge thirdreality-otbr-agent failed; package files may remain (left in place on purpose to keep dpkg state consistent)"
     fi
 
-    # 全局配置收尾:即使 purge 跑过也要复核,其中 /etc/sysctl.conf 里 postinst 追加的
-    # optmem_max 从来没有任何 prerm 清理过。
+    # Global config, re-checked even after a successful purge: the net.core.optmem_max line that
+    # postinst appends to /etc/sysctl.conf has never been cleaned up by any prerm.
     if [ -f /etc/iproute2/rt_tables ]; then
         sed -i.bak '/88[[:space:]]\+openthread/d' /etc/iproute2/rt_tables > /dev/null 2>&1 || true
         rm -f /etc/iproute2/rt_tables.bak > /dev/null 2>&1 || true
@@ -373,8 +373,8 @@ remove_homeassistant_core()
     apt-get autoremove -y >/dev/null 2>&1 || true
     systemctl daemon-reload || true
 
-    # OTBR 的清理已移到独立的 remove_otbr_agent(主流程直接调用):它与 HA 无关,
-    # 留在这里会被本函数开头"没有 home-assistant.service 就 return"挡掉。
+    # OTBR cleanup moved to the standalone remove_otbr_agent (called from the main flow): it is
+    # unrelated to HA, and here it was blocked by this function early return without HA.
     print_info "remove_homeassistant_core (done)"
 }
 
@@ -583,12 +583,12 @@ PYTHON_EOF
     print_info "Zigbee2MQTT configuration updated successfully"
 }
 
-# ========== 主流程开始 ==========
+# ========== main flow starts ==========
 
 print_info "=== Factory reset script started ==="
 echo "System is starting to perform factory reset actions." | wall
 
-# 设置 LED 为 factory reset 状态
+# Set the LED to the factory reset pattern
 if [ -e "/usr/local/bin/supervisor" ]; then
     /usr/local/bin/supervisor led clear || true
     /usr/local/bin/supervisor led factory_reset || true
@@ -604,12 +604,12 @@ wait_for_dpkg_lock
 
 remove_homeassistant_core
 
-# remove otbr-agent (Thread border router). 独立于 HA 调用:两代形态各一份清理,
-# 都会跑;没装 HA 的机器也要能清干净。
+# remove otbr-agent (Thread border router). Called independently of HA: one cleanup per layout,
+# both run, so a machine without HA gets cleaned too.
 remove_otbr_agent
 
 # remove matter2mqtt (conflicting stack with the native matter-server; either
-# may be installed — the removal is a no-op when absent)
+# may be installed -- the removal is a no-op when absent)
 remove_matter2mqtt
 
 # remove zigbee2mqtt
@@ -645,14 +645,14 @@ print_info "Removing hassio/homeassistant/thread and thirdreality paths (start)"
 rm -rf /usr/share/hassio > /dev/null 2>&1 || true
 rm -rf /var/lib/homeassistant > /dev/null 2>&1 || true
 rm -rf /var/lib/thread  > /dev/null 2>&1 || true
-# /lib/thirdreality/conf/ 不再清空:里面的 configuration_blz.yaml.default /
-# configuration_zigate.yaml.default / mosquitto.conf.default 是
-# **thirdreality-zigbee-mqtt 包拥有的文件**(dpkg -S /lib/thirdreality/conf/... 可查),
-# 而 post-fix-zigbee2mqtt.sh 正是靠它们生成 mosquitto.conf 与 z2m 的 configuration.yaml。
-# 手工删等于删别人包的文件:purge 成功时这么做是多余的,purge 失败时则留下
-# "dpkg 认为文件在、磁盘上却没了"的不一致,连重装同版本都救不回来。交给
-# remove_zigbee2mqtt 的 purge 处理。
-# backup/ 与 archives/ 是本脚本(supervisor)自己的数据目录,只清内容、不删目录本身。
+# /lib/thirdreality/conf/ is no longer wiped: configuration_blz.yaml.default,
+# configuration_zigate.yaml.default and mosquitto.conf.default in there belong to the
+# thirdreality-zigbee-mqtt package (dpkg -S /lib/thirdreality/conf/... confirms it), and
+# post-fix-zigbee2mqtt.sh reads them to generate mosquitto.conf and z2m configuration.yaml.
+# Hand-deleting them removes another package files: redundant when purge succeeds, harmful
+# when it fails, leaving dpkg believing files exist that are gone -- not even reinstalling the
+# same version restores them. Left to the purge in remove_zigbee2mqtt.
+# backup/ and archives/ are this script (supervisor) own data dirs: contents only, never the dirs.
 rm -rf /lib/thirdreality/backup/*  > /dev/null 2>&1 || true
 rm -rf /lib/thirdreality/archives/* > /dev/null 2>&1 || true
 rm -rf /usr/lib/firmware/bl706/bflb_iot > /dev/null 2>&1 || true
