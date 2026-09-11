@@ -112,8 +112,8 @@ otbr_uninstall() {
         rm -f /usr/lib/thirdreality/hubv3-otbr-agent.sh \
               /usr/lib/thirdreality/otbr_database \
               /usr/lib/thirdreality/otbr-firewall.sh
-        # 只在确实空了的时候才摘掉目录本身
-        rmdir /usr/lib/thirdreality 2>/dev/null || true
+        # 目录本身一律留着（连 rmdir 都不做）：它是多个包和镜像的共用落脚点，
+        # 由谁创建、谁该回收并不清晰，留一个空目录的代价远小于误删。
     fi
     rm -rf /var/lib/thread
 

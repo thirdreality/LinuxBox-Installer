@@ -645,7 +645,14 @@ print_info "Removing hassio/homeassistant/thread and thirdreality paths (start)"
 rm -rf /usr/share/hassio > /dev/null 2>&1 || true
 rm -rf /var/lib/homeassistant > /dev/null 2>&1 || true
 rm -rf /var/lib/thread  > /dev/null 2>&1 || true
-rm -rf /lib/thirdreality/conf/*  > /dev/null 2>&1 || true
+# /lib/thirdreality/conf/ 不再清空:里面的 configuration_blz.yaml.default /
+# configuration_zigate.yaml.default / mosquitto.conf.default 是
+# **thirdreality-zigbee-mqtt 包拥有的文件**(dpkg -S /lib/thirdreality/conf/... 可查),
+# 而 post-fix-zigbee2mqtt.sh 正是靠它们生成 mosquitto.conf 与 z2m 的 configuration.yaml。
+# 手工删等于删别人包的文件:purge 成功时这么做是多余的,purge 失败时则留下
+# "dpkg 认为文件在、磁盘上却没了"的不一致,连重装同版本都救不回来。交给
+# remove_zigbee2mqtt 的 purge 处理。
+# backup/ 与 archives/ 是本脚本(supervisor)自己的数据目录,只清内容、不删目录本身。
 rm -rf /lib/thirdreality/backup/*  > /dev/null 2>&1 || true
 rm -rf /lib/thirdreality/archives/* > /dev/null 2>&1 || true
 rm -rf /usr/lib/firmware/bl706/bflb_iot > /dev/null 2>&1 || true

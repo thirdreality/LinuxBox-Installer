@@ -40,7 +40,8 @@
 > （`hubv3-otbr-agent.sh` / `otbr_database` / `otbr-firewall.sh`），不再 `rm -rf
 > /usr/lib/thirdreality` —— 那个目录里还有 `hubv3-usb-sync.sh`、`post-fix-zigbee2mqtt.sh`、
 > `resetupwifi.sh`、`hubv3-generate-ota-indexes.sh`、`conf/` 等，多数不属于任何 deb
-> （镜像直接放的），删掉连重装包都恢复不了。
+> （镜像直接放的），删掉连重装包都恢复不了。目录本身也**一律不删**（连 `rmdir` 都不做）：
+> 它是多个包与镜像的共用落脚点，留一个空目录的代价远小于误删。
 
 - 依赖前置系统包（见 `DEBIAN/control` 的 `Depends`）：
   `iptables, ipset, iputils-ping, libprotobuf-lite32, libjsoncpp25, iproute2, bind9`。
