@@ -31,8 +31,16 @@
 ```bash
 ./build.sh            # 构建 deb
 ./build.sh --rebuild  # 删除已 clone 的源码/output 后重建
-./build.sh --clean    # 卸载服务、删除源码/output/deb、清理系统安装的二进制与规则
+./build.sh --clean    # 卸载服务、删除源码/output/staging/deb、清理规则
 ```
+
+> `--clean` 的卸载走**包管理优先**：`thirdreality-otbr-agent` 由 dpkg 管理时用
+> `apt-get purge`，只有在没有 dpkg 记录（即旧版 build.sh 用 `ninja install` 直接写进 `/usr`
+> 的遗留）时才手工删那几个路径。并且**只删本包自己的三个脚本**
+> （`hubv3-otbr-agent.sh` / `otbr_database` / `otbr-firewall.sh`），不再 `rm -rf
+> /usr/lib/thirdreality` —— 那个目录里还有 `hubv3-usb-sync.sh`、`post-fix-zigbee2mqtt.sh`、
+> `resetupwifi.sh`、`hubv3-generate-ota-indexes.sh`、`conf/` 等，多数不属于任何 deb
+> （镜像直接放的），删掉连重装包都恢复不了。
 
 - 依赖前置系统包（见 `DEBIAN/control` 的 `Depends`）：
   `iptables, ipset, iputils-ping, libprotobuf-lite32, libjsoncpp25, iproute2, bind9`。
@@ -41,6 +49,14 @@
   重内存服务（HA / matter / z2m / mosquitto / music-assistant / **otbr-agent / otbr-web**），
   结束（含失败/中断）自动 swapoff + 恢复服务。开关：`TR_SKIP_SWAP=1` / `TR_KEEP_SERVICES=1`
   / `TR_SWAP_TARGET_MIB=N`。
+- **打包内容从 `staging/` 收集，不碰构建机的 `/usr`**：`ninja install` 以
+  `DESTDIR=staging/` 落地（`CMAKE_INSTALL_PREFIX=/usr`，所以路径是 `staging/usr/...`），
+  Step 6 再按显式清单从 `staging/` 拷进 `output/`。以前是直接 install 进构建机真实的 `/usr`
+  再从根文件系统 `cp` 回来（那份 `cp` 清单当年是照着 openthread 项目的安装过程观察出来的），
+  带来三个问题，现已消除：构建会给运行中的网关换二进制且这些文件绕过 dpkg；deb 装过一次后
+  `cp` 出来的 unit 可能是上一版 deb 留下的而非本次编译产物；上游改安装布局时硬编码清单不会
+  跟着变、静默漏文件。现在还有双向校验：清单里的文件在 `staging/` 里缺失就**中止构建**，
+  `staging/` 里出现清单外的可执行文件或 unit 就**打印告警**提示清单需要更新。
 - cmake 关键参数（`build.sh` Step 5）：`CMAKE_INSTALL_PREFIX=/usr`、`OTBR_DBUS=OFF`、
   `OTBR_MDNS=openthread`、`OTBR_WEB=ON`、`OTBR_NAT64=ON`（CIDR `192.168.255.0/24`）、
   `OT_THREAD_VERSION=1.4`、`OT_RCP_RESTORATION_MAX_COUNT=2`（对齐 add-on beta，掉链更稳）。
@@ -164,7 +180,8 @@ otbr-web.service     After + BindsTo = otbr-agent.service
 
 | 路径 | 说明 |
 |------|------|
-| `build.sh` | 编译打包脚本（clone→bootstrap→cmake→ninja install→收集→dpkg-deb） |
+| `build.sh` | 编译打包脚本（clone→bootstrap→cmake→`DESTDIR=staging/ ninja install`→收集→dpkg-deb） |
+| `staging/` | `ninja install` 的落地目录（gitignore）。打包内容只从这里收集 |
 | `openthread-core-ha-config-posix.h` | OpenThread 编译期配置头（首次构建自动下载） |
 | `DEBIAN/{preinst,postinst,prerm,control}` | 维护脚本与包元信息 |
 | `prebuild/otbr-firewall.sh` | 防火墙/NAT64 建拆脚本（setup/teardown） |

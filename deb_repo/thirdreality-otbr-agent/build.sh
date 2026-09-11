@@ -18,6 +18,16 @@ set -euo pipefail
 
 current_dir=$(pwd)
 output_dir="${current_dir}/output"
+# `ninja install` 的落地目录。以前直接 install 进构建机的真实 /usr，再从根文件系统 cp 回来
+# （这套 cp 清单当年是照着 openthread 项目的安装过程"观察"出来的）。那样做有三个后果：
+#   1. 构建即改动构建机 —— 这台机器同时是网关，等于给运行中的服务换二进制，而且这些文件
+#      绕过了 dpkg，dpkg 的 md5sums 会与磁盘失配；
+#   2. deb 装过一次后，/usr/lib/systemd/system/otbr-*.service 既可能是 cmake 刚装的、也可能
+#      是上一版 deb 留下的，cp 出来分辨不出，出错也不报错；
+#   3. 上游改了安装布局，硬编码的 cp 清单不会跟着变，静默漏文件，装到设备上才炸。
+# 改为 DESTDIR 安装到这个 staging 目录，再从 staging 按清单收集，构建机的 /usr 不再被碰，
+# 并且可以校验清单与 staging 的实际内容是否还对得上。
+staging_dir="${current_dir}/staging"
 
 COMMIT="ec16e396382b4559e70a2c6fdeecb7d596a5e915"   # tag v2026.07.0
 SRC_DIR="${current_dir}/ot-br-posix"
@@ -85,24 +95,40 @@ otbr_uninstall() {
     rm -f /etc/sysctl.d/60-otbr-ip-forward.conf
     sysctl -p /etc/sysctl.conf || true
 
-    # 二进制 & 数据
-    rm -f /usr/sbin/otbr-agent /usr/sbin/otbr-web /usr/sbin/ot-ctl
-    rm -rf /usr/share/otbr-web
-    rm -rf /usr/lib/thirdreality
+    # 二进制 & 数据。包管理优先：装过 deb 就走 purge，别手工删 dpkg 拥有的文件 ——
+    # 否则 dpkg 仍认为包装着而文件已消失，之后同版本 deb 会被 U 盘安装器判为"已最新"跳过，
+    # 反而修不回来。手工删只用于旧版 build.sh 那种 ninja 直接写进 /usr、不受 dpkg 管理的遗留。
+    if dpkg -l 2>/dev/null | grep -q "^ii[[:space:]]*thirdreality-otbr-agent"; then
+        echo "thirdreality-otbr-agent 已由 dpkg 管理，走 apt-get purge"
+        apt-get purge -y thirdreality-otbr-agent || \
+            echo "警告: purge 失败，包文件保留（不手工删，以免 dpkg 状态与磁盘不一致）"
+    else
+        rm -f /usr/sbin/otbr-agent /usr/sbin/otbr-web /usr/sbin/ot-ctl
+        rm -rf /usr/share/otbr-web
+        # 只删本包自己的三个脚本。绝不 `rm -rf /usr/lib/thirdreality`：那个目录里还放着
+        # hubv3-usb-sync.sh / post-fix-zigbee2mqtt.sh / resetupwifi.sh /
+        # hubv3-generate-ota-indexes.sh / conf/ / archives_zigbee2mqtt/ 等，多数不属于任何
+        # deb（镜像直接放的），删掉连重装包都恢复不了。
+        rm -f /usr/lib/thirdreality/hubv3-otbr-agent.sh \
+              /usr/lib/thirdreality/otbr_database \
+              /usr/lib/thirdreality/otbr-firewall.sh
+        # 只在确实空了的时候才摘掉目录本身
+        rmdir /usr/lib/thirdreality 2>/dev/null || true
+    fi
     rm -rf /var/lib/thread
 
     echo "清理完成。"
 }
 
 if [[ "$CLEAN" == true ]]; then
-    rm -rf "${output_dir}" "${current_dir}"/*.deb "${SRC_DIR}"
+    rm -rf "${output_dir}" "${staging_dir}" "${current_dir}"/*.deb "${SRC_DIR}"
     otbr_uninstall
     exit 0
 fi
 
 if [[ "$REBUILD" == true ]]; then
     print_info "重新构建..."
-    rm -rf "${output_dir}" "${SRC_DIR}"
+    rm -rf "${output_dir}" "${staging_dir}" "${SRC_DIR}"
 fi
 
 # =============================================================================
@@ -233,7 +259,11 @@ WEB_GUI=1 REST_API=1 DOCKER=1 OTBR_MDNS=openthread \
     "-DOT_PROJECT_CONFIG=${CONFIG_H_DEST}"
 
 cd "${SRC_DIR}/build/otbr"
-ninja install
+# DESTDIR 安装到 staging（CMAKE_INSTALL_PREFIX=/usr，所以落点是 ${staging_dir}/usr/...），
+# 构建机真实的 /usr 不再被改动。每次先清空 staging，避免上一轮的残留被当成本轮产物。
+rm -rf "${staging_dir}"
+mkdir -p "${staging_dir}"
+DESTDIR="${staging_dir}" ninja install
 
 cd "${current_dir}"
 
@@ -242,17 +272,62 @@ cd "${current_dir}"
 # =============================================================================
 print_step "Step 6: 收集文件"
 
-# --- 二进制 ---
-cp /usr/sbin/otbr-agent "${output_dir}/usr/sbin/"
-cp /usr/sbin/otbr-web   "${output_dir}/usr/sbin/"
-cp /usr/sbin/ot-ctl     "${output_dir}/usr/sbin/"
+# 从 staging 收集，不再从构建机的根文件系统 cp。清单依然是显式的（打包内容要可控），
+# 但现在能对着 install 的真实结果做双向校验。
+# 上游产物（ninja install 到 ${staging_dir}）
+STAGED_FILES=(
+    usr/sbin/otbr-agent
+    usr/sbin/otbr-web
+    usr/sbin/ot-ctl
+    usr/lib/systemd/system/otbr-agent.service
+    usr/lib/systemd/system/otbr-web.service
+)
+STAGED_DIRS=(
+    usr/share/otbr-web
+)
 
-# --- Web 前端静态文件 ---
-cp -R /usr/share/otbr-web "${output_dir}/usr/share/"
+# 正向校验：清单里的东西必须真的被 install 出来。以前从 /usr cp，文件是上一版 deb 留下的
+# 也照样 cp 得到，漏装看不出来；现在缺了就直接中止。
+missing=0
+for f in "${STAGED_FILES[@]}"; do
+    if [[ ! -f "${staging_dir}/${f}" ]]; then
+        print_error "install 产物缺失: ${f}"
+        missing=1
+    fi
+done
+for d in "${STAGED_DIRS[@]}"; do
+    if [[ ! -d "${staging_dir}/${d}" ]]; then
+        print_error "install 产物缺失: ${d}/"
+        missing=1
+    fi
+done
+if (( missing )); then
+    print_error "收集清单与 install 结果不符，上游安装布局可能已变更，中止构建"
+    exit 1
+fi
 
-# --- systemd service 文件（cmake 安装到 /usr/lib/systemd/system/）---
-cp /usr/lib/systemd/system/otbr-agent.service "${output_dir}/usr/lib/systemd/system/"
-cp /usr/lib/systemd/system/otbr-web.service   "${output_dir}/usr/lib/systemd/system/"
+for f in "${STAGED_FILES[@]}"; do
+    mkdir -p "${output_dir}/$(dirname "${f}")"
+    cp "${staging_dir}/${f}" "${output_dir}/${f}"
+done
+for d in "${STAGED_DIRS[@]}"; do
+    mkdir -p "${output_dir}/$(dirname "${d}")"
+    cp -R "${staging_dir}/${d}" "${output_dir}/$(dirname "${d}")/"
+done
+
+# 反向校验：staging 里出现清单之外的可执行文件或 unit（例如上游新增了一个必需的共享库或
+# 服务），说明清单该更新了。只告警不中止，但会明确列出来，不再静默漏掉。
+# usr/share/otbr-web 整目录收走，其中的静态资源无需逐个比对。
+while read -r extra; do
+    rel="${extra#"${staging_dir}"/}"
+    case " ${STAGED_FILES[*]} " in
+        *" ${rel} "*) continue ;;
+    esac
+    if [[ "${rel}" == usr/share/otbr-web/* ]]; then
+        continue
+    fi
+    print_error "注意: install 产生了清单外的文件，未打包，请确认是否需要: ${rel}"
+done < <(find "${staging_dir}" -type f \( -perm -u+x -o -name '*.service' \) 2>/dev/null)
 
 # --- ThirdReality 专属脚本 ---
 cp "${current_dir}/prebuild/hubv3-otbr-agent.sh"      "${output_dir}/usr/lib/thirdreality/"

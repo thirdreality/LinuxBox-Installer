@@ -1,5 +1,7 @@
 # Build artifacts
 deb_repo/*/output/
+# DESTDIR staging for otbr-agent (`ninja install` lands here, never in the build host's /usr)
+deb_repo/*/staging/
 deb_repo/*/*.deb
 deb_repo/*/build.log
 
