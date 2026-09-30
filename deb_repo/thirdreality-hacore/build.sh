@@ -382,6 +382,9 @@ if [ -d "${home_assistant_path}/bin" ]; then
     cp ${current_dir}/prebuild/home_assistant_blz_reset.sh ${home_assistant_path}/bin/home_assistant_blz_reset.sh
     chmod +x ${home_assistant_path}/bin/home_assistant_blz_reset.sh
 
+    cp ${current_dir}/prebuild/matter_server_lock_cleanup.sh ${home_assistant_path}/bin/matter_server_lock_cleanup.sh
+    chmod +x ${home_assistant_path}/bin/matter_server_lock_cleanup.sh
+
     cp ${current_dir}/prebuild/home_assistant_boot_check.sh ${home_assistant_path}/bin/home_assistant_boot_check.sh
     cp ${current_dir}/prebuild/home_assistant_boot_check.py ${home_assistant_path}/bin/home_assistant_boot_check.py
     chmod +x ${home_assistant_path}/bin/home_assistant_boot_check.sh

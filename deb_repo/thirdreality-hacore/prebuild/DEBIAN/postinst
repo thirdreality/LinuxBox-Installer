@@ -96,6 +96,7 @@ setup_script_permissions() {
         "home_assistant_zigbee_fix.sh"
         "home_assistant_init.sh"
         "home_assistant_boot_check.py"
+        "matter_server_lock_cleanup.sh"
     )
     
     for script in "${scripts[@]}"; do

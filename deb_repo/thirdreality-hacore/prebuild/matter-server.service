@@ -9,9 +9,15 @@ WorkingDirectory=/srv/matter_server
 Environment=PATH=/usr/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin:/bin
 Environment=NODE_ENV=production
 ExecStartPre=/bin/sleep 5
-# BLE 配对通过 HA 的 BLE proxy（matter-ble-proxy, 走 BlueZ/bleak）完成，
-# 不使用 --bluetooth-adapter：noble 的 raw HCI socket 会与 bluetoothd/HA 蓝牙
-# 集成争抢 hci0，导致配对中途 LE 连接被 bluetoothd 断开（已在真机复现）。
+# A power cut or SIGKILL leaves matter.lock behind in the storage directories, and
+# matter.js only treats a lock as stale when its recorded pid is gone. After a reboot
+# that pid is usually reused by another boot-time service, so the lock looks alive
+# forever and every start fails with [storage-lock].
+ExecStartPre=-/srv/homeassistant/bin/matter_server_lock_cleanup.sh /var/lib/homeassistant/matter_server
+# BLE commissioning goes through HA's BLE proxy (matter-ble-proxy, via BlueZ/bleak).
+# We deliberately omit --bluetooth-adapter: noble's raw HCI socket fights bluetoothd
+# and the HA Bluetooth integration over hci0, which made bluetoothd drop the LE link
+# mid-commissioning (reproduced on real hardware).
 ExecStart=/usr/bin/node --enable-source-maps /srv/matter_server/node_modules/matter-server/dist/esm/MatterServer.js --storage-path /var/lib/homeassistant/matter_server --port 5580 --vendorid 4939 --fabricid 2 --ble-proxy --log-level info --log-file /var/lib/homeassistant/matter_server/matter_server.log
 Restart=on-failure
 RestartSec=15
