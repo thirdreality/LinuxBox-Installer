@@ -253,6 +253,51 @@ configure_zigbee2mqtt() {
     fi    
 }
 
+# Z2M >= 2.x requires advanced.enable_external_js to load data/external_converters/*.js
+enable_external_js() {
+    local config_file="$ZIGBEE2MQTT_DIR/configuration.yaml"
+
+    if [ ! -f "$config_file" ]; then
+        return 0
+    fi
+
+    if grep -qE '^[[:space:]]*enable_external_js[[:space:]]*:' "$config_file"; then
+        log "enable_external_js already present in configuration.yaml"
+        return 0
+    fi
+
+    if grep -qE '^advanced[[:space:]]*:' "$config_file"; then
+        log "Adding advanced.enable_external_js to configuration.yaml"
+        sed -i '/^advanced[[:space:]]*:/a\  enable_external_js: true' "$config_file"
+    else
+        log "Adding advanced section with enable_external_js to configuration.yaml"
+        printf '\nadvanced:\n  enable_external_js: true\n' >> "$config_file"
+    fi
+}
+
+# Z2M renames converters it failed to load to *.js.invalid, and those leftovers are
+# inert (loadFiles only reads .js/.mjs/.cjs) but confusing, so drop ours after copying.
+install_external_converters() {
+    local converters_dir="$ZIGBEE2MQTT_DIR/external_converters"
+    local pristine_dir="$THIRDREALITY_CONF/external_converters"
+
+    if [ ! -d "$pristine_dir" ]; then
+        log "WARNING: external_converters template not found at $pristine_dir, skipping"
+        return 0
+    fi
+
+    mkdir -p "$converters_dir"
+
+    local f name
+    for f in "$pristine_dir"/*.js; do
+        [ -e "$f" ] || continue
+        name=${f##*/}
+        log "Installing external converter $name"
+        cp -f "$f" "$converters_dir/$name"
+        rm -f "$converters_dir/$name.invalid"
+    done
+}
+
 stop_services() {
     log "=== Stopping services for package installation ==="
     
@@ -404,6 +449,8 @@ rm -rf ${DEFAULT_APT_CACHE}/*.deb
 
 configure_mosquitto
 configure_zigbee2mqtt
+enable_external_js
+install_external_converters
 
 
 SKIP_AUTO_CONFIGRATION=false

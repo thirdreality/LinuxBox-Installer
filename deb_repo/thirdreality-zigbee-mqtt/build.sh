@@ -41,10 +41,8 @@ print_info "Version: $version"
 if [[ "$CLEAN" == true ]]; then
     print_info "zigbee-mqtt_${version}.deb cleaning ..."
     rm -rf /opt/zigbee2mqtt > /dev/null 2>&1
-    rm -rf /opt/zigbee-herdsman > /dev/null 2>&1
 
     systemctl stop mosquitto.service || true
-    systemctl disable mosquitto.service || true
 
     systemctl stop zigbee2mqtt.service || true
     systemctl disable zigbee2mqtt.service || true
@@ -120,10 +118,12 @@ if ! dpkg -l | grep -q "mosquitto " || ! dpkg -l | grep -q "mosquitto-clients"; 
     #mosquitto -v
 
     mkdir -p ${current_dir}/prebuild/deb/mosquitto
-    cp /var/cache/apt/archives/mosquitto*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
-    cp /var/cache/apt/archives/libmosquitto*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
-    cp /var/cache/apt/archives/libdlt2*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
-    cp /var/cache/apt/archives/mosquitto-clients*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true    
+    # Keep globs narrow: libmosquitto* would also drag in libmosquitto-dev, which
+    # post-fix never installs (its whitelist only accepts libmosquitto1_*.deb).
+    cp /var/cache/apt/archives/mosquitto_*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libmosquitto1_*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/libdlt2_*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true
+    cp /var/cache/apt/archives/mosquitto-clients_*.deb ${current_dir}/prebuild/deb/mosquitto/ 2>/dev/null || true    
 fi
 
 # post install
@@ -270,26 +270,20 @@ if [ ! -d "/opt/zigbee2mqtt" ]; then
     
     cp ${current_dir}/prebuild/configuration_zigate.yaml /opt/zigbee2mqtt/data/configuration_zigate.yaml
     cp ${current_dir}/prebuild/configuration_blz.yaml /opt/zigbee2mqtt/data/configuration_blz.yaml
-
-    mkdir -p /opt/zigbee2mqtt/data/external_converters
-    if [ -d "${current_dir}/prebuild/converters" ]; then
-        print_info "Copy converters to /opt/zigbee2mqtt/data/external_converters ..."
-        cp ${current_dir}/prebuild/converters/*.js /opt/zigbee2mqtt/data/external_converters/ || true
-    fi
 else
     cd /opt/zigbee-herdsman
-    dirty_id=$(/usr/bin/git describe --dirty --always)
+    dirty_id=$(/usr/bin/git describe --dirty --always 2>/dev/null || printf 'unknown')
     print_info "zigbee-herdsman dirty-id '$dirty_id'"
     echo "zigbee-herdsman-dirty-id: $dirty_id" >> ${output_dir}/DEBIAN/control
-    commit_id=$(git log -1 --format=%H)
+    commit_id=$(git log -1 --format=%H 2>/dev/null || printf 'unknown')
     print_info "zigbee-herdsman commit-id '$commit_id'"
     echo "zigbee-herdsman-commit: $commit_id" >> ${output_dir}/DEBIAN/control
 
     cd /opt/zigbee2mqtt
-    dirty_id=$(/usr/bin/git describe --dirty --always)
+    dirty_id=$(/usr/bin/git describe --dirty --always 2>/dev/null || printf 'unknown')
     print_info "zigbee2mqtt dirty-id '$dirty_id'"
     echo "zigbee2mqtt-dirty-id: $dirty_id" >> ${output_dir}/DEBIAN/control
-    commit_id=$(git log -1 --format=%H)
+    commit_id=$(git log -1 --format=%H 2>/dev/null || printf 'unknown')
     print_info "zigbee2mqtt commit-id '$commit_id'"
     echo "zigbee2mqtt-commit: $commit_id" >> ${output_dir}/DEBIAN/control        
 fi
@@ -341,6 +335,19 @@ rm -rf ${output_dir}/opt/zigbee2mqtt/data/configuration.yaml || true
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/configuration_blz.yaml || true
 rm -rf ${output_dir}/opt/zigbee2mqtt/data/configuration_zigate.yaml || true
 
+# Refresh converters on every (re)packaging run, not just on a full first build.
+# The /opt tree may hold *.js.invalid leftovers from a previous Z2M load failure,
+# so always seed the deb straight from prebuild/converters instead.
+print_info "Refresh external converters ..."
+rm -rf ${output_dir}/opt/zigbee2mqtt/data/external_converters
+mkdir -p ${output_dir}/opt/zigbee2mqtt/data/external_converters
+mkdir -p ${output_dir}/lib/thirdreality/conf/external_converters
+if [ -d "${current_dir}/prebuild/converters" ]; then
+    cp ${current_dir}/prebuild/converters/*.js ${output_dir}/opt/zigbee2mqtt/data/external_converters/
+    # Template copy, used by post-fix for the fix-dependency / manual-install path
+    cp ${current_dir}/prebuild/converters/*.js ${output_dir}/lib/thirdreality/conf/external_converters/
+fi
+
 mkdir -p ${output_dir}/usr/lib/node_modules
 #cp /lib/node_modules/corepack ${output_dir}/lib/node_modules/ -R
 #cp /lib/node_modules/npm ${output_dir}/lib/node_modules/ -R
@@ -359,7 +366,10 @@ cp ${current_dir}/prebuild/mosquitto.conf ${output_dir}/lib/thirdreality/conf/mo
 
 # ---------------------
 print_info "Start to build zigbee-mqtt_${version}.deb ..."
-dpkg-deb --build ${output_dir} ${current_dir}/zigbee-mqtt_${version}.deb
+if ! dpkg-deb --build ${output_dir} ${current_dir}/zigbee-mqtt_${version}.deb; then
+    print_error "Failed to build zigbee-mqtt_${version}.deb"
+    exit 1
+fi
 
 #rm -rf ${output_dir} > /dev/null 2>&1
 
