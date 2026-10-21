@@ -1,37 +1,56 @@
 #!/bin/bash
 # =============================================================================
-# build.sh - ThirdReality OTBR Agent deb 打包脚本
+# build.sh - ThirdReality OTBR Agent deb packaging script
 #
-# 对应版本: ot-br-posix v2026.07.0 (commit ec16e396, Thread 1.4, OTBR_MDNS=openthread)
+# Target version: ot-br-posix v2026.10.0 (commit cb4bdae2, Thread 1.4, OTBR_MDNS=openthread)
 #
-# 与旧版主要变化:
-#   - 编译方式: setup → bootstrap + cmake-build
-#   - mDNS: 外部 mDNSResponder → 内置，无需 mdnsd/libdns_sd/libnss_mdns
-#   - 删除: otbr-nat44（NAT64 内置）、mdns init.d、dbus conf、nss_mdns.conf
-#   - 删除: otbr-agent-init.sh（ExecStartPre 改为 firewall start）
-#   - CMAKE_INSTALL_PREFIX=/usr → 路径与旧版一致
-#   - Web GUI: WEB_GUI=1/OTBR_WEB=ON，前端用系统已装的 nodejs/npm 构建
-#     (bootstrap 仅在缺少 npm 时才 apt 安装；本机使用 NodeSource v24)
+# Main differences from the pre-v2026.07.0 layout:
+#   - Build flow: setup -> bootstrap + cmake-build
+#   - mDNS: external mDNSResponder -> built in, no mdnsd/libdns_sd/libnss_mdns
+#   - Dropped: otbr-nat44 (NAT64 is built in), mdns init.d, dbus conf, nss_mdns.conf
+#   - Dropped: otbr-agent-init.sh (ExecStartPre now runs the firewall script)
+#   - CMAKE_INSTALL_PREFIX=/usr -> same paths as the old layout
+#   - Web GUI: WEB_GUI=1/OTBR_WEB=ON, frontend built with the system nodejs/npm
+#     (bootstrap only apt-installs npm when it is missing; this host uses NodeSource v24)
+#
+# v2026.07.0 -> v2026.10.0 notes:
+#   - Upstream added an opt-in in-process nftables firewall backend
+#     (-DOTBR_NFTABLES, Linux-only) and a pf backend (-DOTBR_PF, macOS-only).
+#     We keep BOTH OFF and stay on our own otbr-firewall.sh (ipset/ip6tables),
+#     so the firewall behaviour is unchanged.
+#   - Even with both backends off, the build now always installs two marker
+#     files, /usr/share/otbr/{nftables-backend,pf-backend}, which the legacy
+#     firewall scripts read to decide who owns the rules. They are listed in
+#     STAGED_FILES below so the manifest check stays honest.
+#   - Frontend gained an npm dependency (qrcode-generator) and now also copies
+#     package-lock.json; nothing to do here, npm install covers it.
 # =============================================================================
 
 set -euo pipefail
 
 current_dir=$(pwd)
 output_dir="${current_dir}/output"
-# `ninja install` 的落地目录。以前直接 install 进构建机的真实 /usr，再从根文件系统 cp 回来
-# （这套 cp 清单当年是照着 openthread 项目的安装过程"观察"出来的）。那样做有三个后果：
-#   1. 构建即改动构建机 —— 这台机器同时是网关，等于给运行中的服务换二进制，而且这些文件
-#      绕过了 dpkg，dpkg 的 md5sums 会与磁盘失配；
-#   2. deb 装过一次后，/usr/lib/systemd/system/otbr-*.service 既可能是 cmake 刚装的、也可能
-#      是上一版 deb 留下的，cp 出来分辨不出，出错也不报错；
-#   3. 上游改了安装布局，硬编码的 cp 清单不会跟着变，静默漏文件，装到设备上才炸。
-# 改为 DESTDIR 安装到这个 staging 目录，再从 staging 按清单收集，构建机的 /usr 不再被碰，
-# 并且可以校验清单与 staging 的实际内容是否还对得上。
+# Landing directory for `ninja install`. This used to install straight into the
+# build host's real /usr and then copy the files back out of the root filesystem
+# (that cp list was originally "observed" from the openthread project's install).
+# That had three consequences:
+#   1. Building mutated the build host -- this machine is also the gateway, so it
+#      swapped binaries under running services, and those files bypassed dpkg,
+#      leaving dpkg's md5sums out of sync with the disk;
+#   2. Once the deb had been installed, /usr/lib/systemd/system/otbr-*.service
+#      could be either what cmake had just installed or a leftover from the
+#      previous deb; the copy could not tell them apart and failed silently;
+#   3. When upstream changed the install layout, the hardcoded cp list did not
+#      follow, silently dropping files that only broke on the device.
+# Now DESTDIR installs into this staging directory and files are collected from
+# staging against a manifest, so the build host's /usr is never touched and the
+# manifest can be checked against what was actually installed.
 staging_dir="${current_dir}/staging"
 
-COMMIT="ec16e396382b4559e70a2c6fdeecb7d596a5e915"   # tag v2026.07.0
+COMMIT="cb4bdae242b22287cded07ae3aa10347c2d16d9b"   # tag v2026.10.0
 SRC_DIR="${current_dir}/ot-br-posix"
-# npm 镜像（前端 web gui 的 npm install 走国内镜像，默认 registry 在国内会超时）
+# npm mirror (the web gui frontend's npm install uses a local mirror; the default
+# registry times out from here)
 NPM_REGISTRY="${NPM_REGISTRY:-https://mirrors.tencent.com/npm/}"
 HA_ADDONS_RAW="https://raw.githubusercontent.com/home-assistant/addons/master/openthread_border_router"
 
@@ -43,9 +62,11 @@ print_error() { echo -e "\e[1;31m[BUILD] ERROR:\e[0m $1"; }
 print_step()  { echo -e "\e[1;32m[BUILD] ===== $1 =====\e[0m"; }
 
 # =============================================================================
-# OOM 保护 + 编译期临时停无关重内存服务（含运行中的 otbr-agent/otbr-web）。
-# 逻辑抽到仓库根 deb_repo/build_common.sh 复用（tr_* 前缀），避免与其它包重复。
-# 开关: TR_SKIP_SWAP=1 / TR_KEEP_SERVICES=1 / TR_SWAP_TARGET_MIB=N
+# OOM protection + temporarily stopping unrelated memory-heavy services during
+# the build (including the running otbr-agent/otbr-web).
+# The logic lives in deb_repo/build_common.sh (tr_* prefix) so it is shared
+# instead of duplicated across packages.
+# Toggles: TR_SKIP_SWAP=1 / TR_KEEP_SERVICES=1 / TR_SWAP_TARGET_MIB=N
 # =============================================================================
 source "$(dirname "$(readlink -f "$0")")/../build_common.sh"
 TR_SWAPFILE="${current_dir}/.build-swap"
@@ -56,7 +77,7 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --rebuild) REBUILD=true ;;
         --clean)   CLEAN=true ;;
-        *) print_error "未知参数: $1"; exit 1 ;;
+        *) print_error "Unknown argument: $1"; exit 1 ;;
     esac
     shift
 done
@@ -65,21 +86,22 @@ version=$(grep '^Version:' "${current_dir}/DEBIAN/control" | awk '{print $2}')
 print_info "Version: ${version}  Commit: ${COMMIT}"
 
 # =============================================================================
-# --clean: 卸载并清理
+# --clean: uninstall and clean up
 # =============================================================================
 otbr_uninstall() {
-    echo "停止并禁用服务..."
-    # 先停总闸 hubv3（连带停 agent→触发防火墙 teardown、web 跟随），再逐个兜底
+    echo "Stopping and disabling services..."
+    # Stop the hubv3 master switch first (PartOf stops the agent, which triggers the
+    # firewall teardown, and web follows), then each one as a fallback
     for svc in hubv3-otbr-agent otbr-web otbr-agent; do
         systemctl stop    "${svc}" 2>/dev/null || true
         systemctl disable "${svc}" 2>/dev/null || true
     done
     killall otbr-web otbr-agent 2>/dev/null || true
 
-    # 兜底拆防火墙（万一 ExecStopPost 没跑）
+    # Fallback firewall teardown (in case ExecStopPost did not run)
     [ -x /usr/lib/thirdreality/otbr-firewall.sh ] && /usr/lib/thirdreality/otbr-firewall.sh teardown 2>/dev/null || true
 
-    # 清理 drop-in
+    # Remove drop-ins
     rm -f /etc/systemd/system/otbr-agent.service.d/firewall.conf
     rm -f /etc/systemd/system/otbr-web.service.d/ordering.conf
     rmdir /etc/systemd/system/otbr-agent.service.d 2>/dev/null || true
@@ -87,7 +109,7 @@ otbr_uninstall() {
 
     systemctl daemon-reload
 
-    # 路由表
+    # Routing table
     sed -i.bak '/88[[:space:]]\+openthread/d' /etc/iproute2/rt_tables
 
     # sysctl
@@ -95,29 +117,39 @@ otbr_uninstall() {
     rm -f /etc/sysctl.d/60-otbr-ip-forward.conf
     sysctl -p /etc/sysctl.conf || true
 
-    # 二进制 & 数据。包管理优先：装过 deb 就走 purge，别手工删 dpkg 拥有的文件 ——
-    # 否则 dpkg 仍认为包装着而文件已消失，之后同版本 deb 会被 U 盘安装器判为"已最新"跳过，
-    # 反而修不回来。手工删只用于旧版 build.sh 那种 ninja 直接写进 /usr、不受 dpkg 管理的遗留。
+    # Binaries & data. Package manager first: if the deb was installed, purge it
+    # instead of hand-deleting files dpkg owns -- otherwise dpkg still believes the
+    # package is installed while the files are gone, and the USB installer will then
+    # consider the same version "already up to date" and skip it, so it cannot be
+    # repaired. Hand-deletion is only for the legacy case where the old build.sh had
+    # ninja write directly into /usr outside of dpkg's control.
     if dpkg -l 2>/dev/null | grep -q "^ii[[:space:]]*thirdreality-otbr-agent"; then
-        echo "thirdreality-otbr-agent 已由 dpkg 管理，走 apt-get purge"
+        echo "thirdreality-otbr-agent is dpkg-managed, using apt-get purge"
         apt-get purge -y thirdreality-otbr-agent || \
-            echo "警告: purge 失败，包文件保留（不手工删，以免 dpkg 状态与磁盘不一致）"
+            echo "Warning: purge failed, package files kept (not hand-deleted, to keep dpkg state and disk in sync)"
     else
         rm -f /usr/sbin/otbr-agent /usr/sbin/otbr-web /usr/sbin/ot-ctl
         rm -rf /usr/share/otbr-web
-        # 只删本包自己的三个脚本。绝不 `rm -rf /usr/lib/thirdreality`：那个目录里还放着
-        # hubv3-usb-sync.sh / post-fix-zigbee2mqtt.sh / resetupwifi.sh /
-        # hubv3-generate-ota-indexes.sh / conf/ / archives_zigbee2mqtt/ 等，多数不属于任何
-        # deb（镜像直接放的），删掉连重装包都恢复不了。
+        # Upstream firewall-backend markers (v2026.10.0 and later)
+        rm -f /usr/share/otbr/nftables-backend /usr/share/otbr/pf-backend
+        rmdir /usr/share/otbr 2>/dev/null || true
+        # Only remove this package's own three scripts. NEVER `rm -rf
+        # /usr/lib/thirdreality`: that directory also holds hubv3-usb-sync.sh,
+        # post-fix-zigbee2mqtt.sh, resetupwifi.sh, hubv3-generate-ota-indexes.sh,
+        # conf/, archives_zigbee2mqtt/ and more, most of which belong to no deb
+        # (they ship in the image), so deleting them cannot even be undone by
+        # reinstalling the package.
         rm -f /usr/lib/thirdreality/hubv3-otbr-agent.sh \
               /usr/lib/thirdreality/otbr_database \
               /usr/lib/thirdreality/otbr-firewall.sh
-        # 目录本身一律留着（连 rmdir 都不做）：它是多个包和镜像的共用落脚点，
-        # 由谁创建、谁该回收并不清晰，留一个空目录的代价远小于误删。
+        # The directory itself is always kept (not even an rmdir): it is a shared
+        # landing spot for several packages and the image, it is not clear who
+        # created it or who should reclaim it, and leaving an empty directory costs
+        # far less than deleting it by mistake.
     fi
     rm -rf /var/lib/thread
 
-    echo "清理完成。"
+    echo "Cleanup complete."
 }
 
 if [[ "$CLEAN" == true ]]; then
@@ -127,20 +159,20 @@ if [[ "$CLEAN" == true ]]; then
 fi
 
 if [[ "$REBUILD" == true ]]; then
-    print_info "重新构建..."
+    print_info "Rebuilding..."
     rm -rf "${output_dir}" "${staging_dir}" "${SRC_DIR}"
 fi
 
 # =============================================================================
-# Step 1: 准备 output 目录结构
+# Step 1: prepare the output directory structure
 # =============================================================================
-print_step "Step 1: 准备目录"
+print_step "Step 1: prepare directories"
 
 mkdir -p "${output_dir}"
 rm -rf "${output_dir}/DEBIAN"
 cp -R "${current_dir}/DEBIAN" "${output_dir}/"
 
-# 目标目录（对应 /usr prefix）
+# Target directories (matching the /usr prefix)
 mkdir -p "${output_dir}/usr/sbin"
 mkdir -p "${output_dir}/usr/share"
 mkdir -p "${output_dir}/usr/lib/systemd/system"
@@ -152,9 +184,9 @@ mkdir -p "${output_dir}/etc/systemd/system/otbr-agent.service.d"
 mkdir -p "${output_dir}/etc/systemd/system/otbr-web.service.d"
 
 # =============================================================================
-# Step 2: 下载 HA 配置文件
+# Step 2: download the HA config file
 # =============================================================================
-print_step "Step 2: 下载 HA 附件"
+print_step "Step 2: download HA attachment"
 
 HA_CONFIG_H="${current_dir}/openthread-core-ha-config-posix.h"
 if [[ ! -f "${HA_CONFIG_H}" ]]; then
@@ -179,7 +211,7 @@ fi
 
 git submodule update --init
 
-# 记录 commit 到 control
+# Record the commit in control
 dirty_id=$(git describe --dirty --always)
 commit_id=$(git log -1 --format=%H)
 print_info "dirty-id: ${dirty_id}  commit: ${commit_id}"
@@ -189,21 +221,22 @@ echo "commit: ${commit_id}"  >> "${output_dir}/DEBIAN/control"
 cd "${current_dir}"
 
 # =============================================================================
-# Step 4: Bootstrap（安装编译依赖）
+# Step 4: Bootstrap (install build dependencies)
 # =============================================================================
 print_step "Step 4: Bootstrap"
 
-# Web GUI 前端(AngularJS/d3)在 cmake 阶段通过 `npm install` 拉取依赖。
-# 我们使用系统已安装的 nodejs/npm（不让 bootstrap 用 apt 拉一个旧版本）。
-# bootstrap 的逻辑是: WEB_GUI 开启且缺少 npm 时才 apt 安装 nodejs npm；
-# 因此只要系统已有 node/npm，就会沿用系统版本。
+# The Web GUI frontend (AngularJS/d3) pulls its dependencies via `npm install`
+# during the cmake stage. We use the system nodejs/npm (rather than letting
+# bootstrap apt-install an older version): bootstrap only apt-installs nodejs
+# and npm when WEB_GUI is on AND npm is missing, so an existing system node/npm
+# is reused.
 if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
     print_info "Using system nodejs: $(node --version) / npm $(npm --version)"
 else
-    print_error "系统未检测到 nodejs/npm，web gui 需要它们。请先安装 nodejs(含 npm)后再构建。"
+    print_error "No nodejs/npm found on this system, but the web gui needs them. Install nodejs (with npm) first, then rebuild."
     exit 1
 fi
-# 前端 npm install 走国内镜像，避免默认 registry 超时
+# Point the frontend's npm install at a local mirror to avoid default registry timeouts
 export npm_config_registry="${NPM_REGISTRY}"
 print_info "npm registry: $(npm config get registry)"
 
@@ -212,22 +245,23 @@ BORDER_ROUTING=1 BACKBONE_ROUTER=1 PLATFORM=debian RELEASE=1 \
 WEB_GUI=1 REST_API=1 DOCKER=1 OTBR_MDNS=openthread \
 ./script/bootstrap
 
-# 删除 libsystemd-dev 避免不必要的链接
+# Remove libsystemd-dev to avoid linking against it unnecessarily
 apt-get purge -y libsystemd-dev 2>/dev/null || true
 cd "${current_dir}"
 
 # =============================================================================
-# Step 5: 复制 HA config.h，cmake-build + ninja install
+# Step 5: copy the HA config.h, then cmake-build + ninja install
 # =============================================================================
 print_step "Step 5: cmake-build (PREFIX=/usr)"
 
-# 编译前：先停掉无关重内存服务(结束自动恢复)，再按需配置临时 swap，避免 OOM
+# Before compiling: stop unrelated memory-heavy services (restored on exit), then
+# provision temporary swap if needed, to avoid OOM
 tr_build_guard_start
 
 CONFIG_H_DEST="${SRC_DIR}/third_party/openthread/repo/openthread-core-ha-config-posix.h"
 cp "${HA_CONFIG_H}" "${CONFIG_H_DEST}"
 
-# beta(1.4) 不需要打 patch
+# beta(1.4) needs no patches
 
 cd "${SRC_DIR}"
 BORDER_ROUTING=1 BACKBONE_ROUTER=1 PLATFORM=debian RELEASE=1 \
@@ -256,53 +290,77 @@ WEB_GUI=1 REST_API=1 DOCKER=1 OTBR_MDNS=openthread \
     -DOT_COAPS=OFF \
     -DOT_THREAD_VERSION=1.4 \
     -DOT_RCP_RESTORATION_MAX_COUNT=2 \
+    -DOTBR_NFTABLES=OFF \
+    -DOTBR_PF=OFF \
     "-DOT_PROJECT_CONFIG=${CONFIG_H_DEST}"
 
 cd "${SRC_DIR}/build/otbr"
-# DESTDIR 安装到 staging（CMAKE_INSTALL_PREFIX=/usr，所以落点是 ${staging_dir}/usr/...），
-# 构建机真实的 /usr 不再被改动。每次先清空 staging，避免上一轮的残留被当成本轮产物。
+# DESTDIR installs into staging (CMAKE_INSTALL_PREFIX=/usr, so things land in
+# ${staging_dir}/usr/...), leaving the build host's real /usr untouched. Staging is
+# wiped first each time so leftovers from a previous round are not mistaken for
+# this round's output.
 rm -rf "${staging_dir}"
 mkdir -p "${staging_dir}"
 DESTDIR="${staging_dir}" ninja install
 
+# Normalise staging to usrmerge layout. The systemd unit dir comes from
+# `pkg-config --variable=systemdsystemunitdir systemd`, which reports
+# /lib/systemd/system, so DESTDIR lands the units in staging/lib/... On the real
+# system /lib is a symlink to usr/lib so both spellings are the same file, but
+# inside staging they are two distinct directories and the manifest's
+# usr/lib/... paths would not exist.
+if [ -d "${staging_dir}/lib" ] && [ ! -L "${staging_dir}/lib" ]; then
+    mkdir -p "${staging_dir}/usr/lib"
+    cp -a "${staging_dir}/lib/." "${staging_dir}/usr/lib/"
+    rm -rf "${staging_dir}/lib"
+fi
+
 cd "${current_dir}"
 
 # =============================================================================
-# Step 6: 打包文件收集
+# Step 6: collect the files to package
 # =============================================================================
-print_step "Step 6: 收集文件"
+print_step "Step 6: collect files"
 
-# 从 staging 收集，不再从构建机的根文件系统 cp。清单依然是显式的（打包内容要可控），
-# 但现在能对着 install 的真实结果做双向校验。
-# 上游产物（ninja install 到 ${staging_dir}）
+# Collected from staging, no longer copied out of the build host's root filesystem.
+# The manifest is still explicit (packaged content must stay controlled), but it can
+# now be checked both ways against what install actually produced.
+# Upstream artifacts (ninja install into ${staging_dir})
 STAGED_FILES=(
     usr/sbin/otbr-agent
     usr/sbin/otbr-web
     usr/sbin/ot-ctl
     usr/lib/systemd/system/otbr-agent.service
     usr/lib/systemd/system/otbr-web.service
+    # Firewall-backend markers (new in v2026.10.0). Installed unconditionally and
+    # contain 0 for us, since both OTBR_NFTABLES and OTBR_PF are OFF; the legacy
+    # firewall scripts read them to confirm they still own the rules. Packaged so
+    # that a future build with -DOTBR_NFTABLES=ON cannot leave a stale 0 behind.
+    usr/share/otbr/nftables-backend
+    usr/share/otbr/pf-backend
 )
 STAGED_DIRS=(
     usr/share/otbr-web
 )
 
-# 正向校验：清单里的东西必须真的被 install 出来。以前从 /usr cp，文件是上一版 deb 留下的
-# 也照样 cp 得到，漏装看不出来；现在缺了就直接中止。
+# Forward check: everything in the manifest must really have been installed. With the
+# old copy-from-/usr approach, a file left behind by the previous deb would be copied
+# just the same, so a missing install went unnoticed; now a missing file aborts.
 missing=0
 for f in "${STAGED_FILES[@]}"; do
     if [[ ! -f "${staging_dir}/${f}" ]]; then
-        print_error "install 产物缺失: ${f}"
+        print_error "missing install artifact: ${f}"
         missing=1
     fi
 done
 for d in "${STAGED_DIRS[@]}"; do
     if [[ ! -d "${staging_dir}/${d}" ]]; then
-        print_error "install 产物缺失: ${d}/"
+        print_error "missing install artifact: ${d}/"
         missing=1
     fi
 done
 if (( missing )); then
-    print_error "收集清单与 install 结果不符，上游安装布局可能已变更，中止构建"
+    print_error "collection manifest does not match the install result; the upstream install layout may have changed, aborting build"
     exit 1
 fi
 
@@ -315,9 +373,12 @@ for d in "${STAGED_DIRS[@]}"; do
     cp -R "${staging_dir}/${d}" "${output_dir}/$(dirname "${d}")/"
 done
 
-# 反向校验：staging 里出现清单之外的可执行文件或 unit（例如上游新增了一个必需的共享库或
-# 服务），说明清单该更新了。只告警不中止，但会明确列出来，不再静默漏掉。
-# usr/share/otbr-web 整目录收走，其中的静态资源无需逐个比对。
+# Reverse check: an executable or unit in staging that is not in the manifest (for
+# example upstream adding a required shared library or service) means the manifest
+# needs updating. Warn only, do not abort, but list them explicitly instead of
+# silently dropping them.
+# usr/share/otbr-web is taken as a whole directory, so its static assets need no
+# per-file comparison.
 while read -r extra; do
     rel="${extra#"${staging_dir}"/}"
     case " ${STAGED_FILES[*]} " in
@@ -326,51 +387,56 @@ while read -r extra; do
     if [[ "${rel}" == usr/share/otbr-web/* ]]; then
         continue
     fi
-    print_error "注意: install 产生了清单外的文件，未打包，请确认是否需要: ${rel}"
+    print_error "note: install produced a file outside the manifest; it was not packaged, please confirm whether it is needed: ${rel}"
 done < <(find "${staging_dir}" -type f \( -perm -u+x -o -name '*.service' \) 2>/dev/null)
 
-# --- ThirdReality 专属脚本 ---
+# --- ThirdReality-specific scripts ---
 cp "${current_dir}/prebuild/hubv3-otbr-agent.sh"      "${output_dir}/usr/lib/thirdreality/"
 cp "${current_dir}/prebuild/hubv3-otbr-agent.service"  "${output_dir}/usr/lib/systemd/system/"
 cp "${current_dir}/prebuild/otbr_database"             "${output_dir}/usr/lib/thirdreality/"
 chmod +x "${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh"
 chmod +x "${output_dir}/usr/lib/thirdreality/otbr_database"
 
-# --- 防火墙脚本（建/拆 ip6tables/ipset/NAT64，替代旧 init.d otbr-firewall）---
+# --- Firewall script (builds/tears down ip6tables/ipset/NAT64, replacing the old
+#     init.d otbr-firewall) ---
 cp "${current_dir}/prebuild/otbr-firewall.sh" "${output_dir}/usr/lib/thirdreality/otbr-firewall.sh"
 chmod +x "${output_dir}/usr/lib/thirdreality/otbr-firewall.sh"
 
-# --- otbr-agent drop-in：启动建防火墙、停止拆防火墙；受 hubv3 总闸管控，带起 web ---
+# --- otbr-agent drop-in: build the firewall on start, tear it down on stop;
+#     governed by the hubv3 master switch, and brings up web ---
 cat > "${output_dir}/etc/systemd/system/otbr-agent.service.d/firewall.conf" << 'EOF'
 [Unit]
-# 我们用 -DOTBR_DBUS=OFF 编译，agent 不需要 dbus；清掉上游模板写死的 dbus 硬依赖
-# （空赋值会重置该依赖列表），否则无 dbus 的设备会因 Requires=dbus.socket 起不来。
+# We build with -DOTBR_DBUS=OFF, so the agent does not need dbus; clear the hard
+# dbus dependency hardcoded in the upstream template (an empty assignment resets
+# the list), otherwise devices without dbus fail to start on Requires=dbus.socket.
 Requires=
-# 受 hubv3-otbr-agent 总闸管控：停/重启 hubv3 时连带停/重启本服务
+# Governed by the hubv3-otbr-agent master switch: stopping/restarting hubv3 stops
+# and restarts this service with it
 PartOf=hubv3-otbr-agent.service
-# 起 otbr-agent 时连带把 web UI 拉起来
+# Starting otbr-agent also brings up the web UI
 Wants=otbr-web.service
 
 [Service]
-# 每次启动成对建/拆防火墙，避免规则残留叠加
+# Build and tear down the firewall in pairs on every start, so rules cannot accumulate
 ExecStartPre=/usr/lib/thirdreality/otbr-firewall.sh setup
 ExecStopPost=/usr/lib/thirdreality/otbr-firewall.sh teardown
 EOF
 
-# --- otbr-web drop-in：绑定 otbr-agent 生命周期（agent 停/重启 → web 跟随）---
+# --- otbr-web drop-in: tie it to the otbr-agent lifecycle (web follows when the
+#     agent stops or restarts) ---
 cat > "${output_dir}/etc/systemd/system/otbr-web.service.d/ordering.conf" << 'EOF'
 [Unit]
 After=otbr-agent.service
 BindsTo=otbr-agent.service
 EOF
 
-# --- env 配置文件（路径与旧版一致：/etc/default/otbr-agent）---
+# --- env config file (same path as the old layout: /etc/default/otbr-agent) ---
 cp "${current_dir}/prebuild/otbr-agent" "${output_dir}/etc/default/otbr-agent"
 
-# --- otbr-web env：自定义 web GUI 端口(避开常见的 80)与监听地址 ---
+# --- otbr-web env: custom web GUI port (avoiding the usual 80) and listen address ---
 cp "${current_dir}/prebuild/otbr-web" "${output_dir}/etc/default/otbr-web"
 
-# --- sysctl：开启 IPv6 转发和 RA ---
+# --- sysctl: enable IPv6 forwarding and RA ---
 cat > "${output_dir}/etc/sysctl.d/60-otbr-ip-forward.conf" << 'EOF'
 net.ipv6.conf.all.forwarding=1
 net.ipv4.ip_forward=1
@@ -382,7 +448,7 @@ net.ipv6.conf.wlan0.accept_ra=2
 net.ipv6.conf.wlan0.accept_ra_rt_info_max_plen=64
 EOF
 
-# --- 内核模块开机自动加载 ---
+# --- Load kernel modules automatically at boot ---
 cat > "${output_dir}/etc/modules-load.d/otbr.conf" << 'EOF'
 ip6table_filter
 ip6_tables
@@ -390,16 +456,16 @@ xt_set
 EOF
 
 # =============================================================================
-# Step 7: 列出产出文件
+# Step 7: list the produced files
 # =============================================================================
-print_step "Step 7: 产出文件"
+print_step "Step 7: output files"
 find "${output_dir}" -type f | grep -v "^${output_dir}/DEBIAN" | sort
 
 # =============================================================================
-# Step 8: 构建 deb
+# Step 8: build the deb
 # =============================================================================
 print_step "Step 8: dpkg-deb"
 
 dpkg-deb --build "${output_dir}" "${current_dir}/otbr-agent_${version}.deb"
 
-print_info "构建完成: otbr-agent_${version}.deb"
+print_info "Build complete: otbr-agent_${version}.deb"

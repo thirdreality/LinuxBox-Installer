@@ -4,7 +4,8 @@ set -e
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     echo "Stopping OTBR services..."
 
-    # 先停总闸 hubv3（连带停 agent→触发 ExecStopPost 拆防火墙、web 跟随），再逐个兜底
+    # Stop the hubv3 master switch first (stops the agent, triggering the
+    # ExecStopPost firewall teardown, with web following), then each one as a fallback
     for svc in hubv3-otbr-agent otbr-web otbr-agent; do
         systemctl stop    "${svc}" 2>/dev/null || true
         systemctl disable "${svc}" 2>/dev/null || true
@@ -12,10 +13,10 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
 
     killall otbr-web otbr-agent 2>/dev/null || true
 
-    # 兜底拆防火墙 ipset & iptables（万一 ExecStopPost 没跑）
+    # Fallback teardown of the firewall ipsets & iptables rules (in case ExecStopPost did not run)
     [ -x /usr/lib/thirdreality/otbr-firewall.sh ] && /usr/lib/thirdreality/otbr-firewall.sh teardown 2>/dev/null || true
 
-    # 清理 drop-in
+    # Remove drop-ins
     rm -f /etc/systemd/system/otbr-agent.service.d/firewall.conf
     rm -f /etc/systemd/system/otbr-web.service.d/ordering.conf
     rmdir /etc/systemd/system/otbr-agent.service.d 2>/dev/null || true
@@ -23,7 +24,7 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
 
     systemctl daemon-reload
 
-    # 路由表
+    # Routing table
     sed -i.bak '/88[[:space:]]\+openthread/d' /etc/iproute2/rt_tables
 
     # sysctl
@@ -31,7 +32,7 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/sysctl.d/60-otbr-ip-forward.conf
     sysctl -p /etc/sysctl.conf || true
 
-    # thread 数据
+    # Thread data
     rm -rf /var/lib/thread
 
     echo "Remove OTBR-Agent success."

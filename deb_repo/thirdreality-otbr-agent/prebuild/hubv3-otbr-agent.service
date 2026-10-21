@@ -2,8 +2,9 @@
 Description=HubV3 otbr agent start service
 After=network-online.target otbr-agent.service
 Wants=network-online.target
-# 总闸：enable/start 本服务即拉起 otbr-agent（进而带起 otbr-web）。
-# 没有 Thread 芯片或不想用 Thread 的设备，只需 disable 本服务即整套关闭。
+# Master switch: enabling/starting this service pulls in otbr-agent (which in turn
+# brings up otbr-web). Devices with no Thread chip, or that do not want Thread,
+# only need to disable this service to turn the whole stack off.
 Wants=otbr-agent.service
 
 [Service]

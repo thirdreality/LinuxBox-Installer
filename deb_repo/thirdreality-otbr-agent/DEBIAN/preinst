@@ -1,7 +1,8 @@
 #!/bin/bash
-# 安装/升级前：停止旧服务
+# Before install/upgrade: stop the old services
 
-# 先停总闸 hubv3（PartOf 连带停 otbr-agent→触发防火墙 teardown，BindsTo 连带停 otbr-web），再逐个兜底
+# Stop the hubv3 master switch first (PartOf stops otbr-agent, which triggers the
+# firewall teardown, and BindsTo stops otbr-web), then each one as a fallback
 for svc in hubv3-otbr-agent otbr-web otbr-agent; do
     if systemctl is-active --quiet "${svc}" 2>/dev/null; then
         echo "Stopping ${svc}..."
@@ -10,7 +11,7 @@ for svc in hubv3-otbr-agent otbr-web otbr-agent; do
     fi
 done
 
-# 升级时清理旧版 mDNSResponder 遗留文件（旧版才有）
+# On upgrade, clean up leftovers from the old mDNSResponder setup (old versions only)
 rm -f /usr/sbin/mdnsd /usr/bin/dns-sd
 rm -f /usr/lib/libdns_sd.so /usr/lib/libdns_sd.so.1
 rm -f /usr/lib/libnss_mdns-0.2.so /usr/lib/libnss_mdns.so.2

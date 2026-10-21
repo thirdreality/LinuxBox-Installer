@@ -1,16 +1,18 @@
 #!/bin/bash
 # =============================================================================
-# otbr-firewall.sh —— 建/拆 OpenThread 的 ip6tables/ipset/NAT64 规则
+# otbr-firewall.sh -- build/tear down OpenThread's ip6tables/ipset/NAT64 rules
 #
-# 由 otbr-agent.service 的 ExecStartPre(setup) / ExecStopPost(teardown) 调用，
-# 保证每次启停成对建/拆，避免规则残留或叠加（旧版用 init.d 只建不拆，会累积）。
-# 逻辑对齐 HA addon openthread_border_router 的 s6 run/finish。
+# Called from otbr-agent.service's ExecStartPre(setup) / ExecStopPost(teardown) so
+# that every start/stop builds and tears down in pairs, leaving no rules behind and
+# never stacking them (the old init.d version only built, never tore down, so rules
+# accumulated).
+# The logic mirrors the HA addon openthread_border_router's s6 run/finish.
 #
-# 开关与接口从 /etc/default/otbr-agent 读取：
-#   OTBR_THREAD_IF   (默认 wpan0)
-#   OTBR_BACKBONE_IF (默认 wlan0)
-#   OTBR_FIREWALL    (默认 1)
-#   OTBR_NAT64       (默认 1)
+# Toggles and interfaces are read from /etc/default/otbr-agent:
+#   OTBR_THREAD_IF   (default wpan0)
+#   OTBR_BACKBONE_IF (default wlan0)
+#   OTBR_FIREWALL    (default 1)
+#   OTBR_NAT64       (default 1)
 # =============================================================================
 set -u
 
@@ -29,7 +31,7 @@ FW_MARK="0x1001"
 log() { echo "[otbr-firewall] $1"; }
 
 teardown() {
-    # --- ip6tables ingress/egress 链 ---
+    # --- ip6tables ingress/egress chains ---
     while ip6tables -C FORWARD -o "${THREAD_IF}" -j "${INGRESS_CHAIN}" 2>/dev/null; do
         ip6tables -D FORWARD -o "${THREAD_IF}" -j "${INGRESS_CHAIN}"
     done
@@ -46,7 +48,7 @@ teardown() {
         ip6tables -w -X "${EGRESS_CHAIN}" 2>/dev/null || true
     fi
 
-    # --- ipset（内核会短暂占用，循环重试销毁）---
+    # --- ipsets (the kernel holds them briefly, so retry the destroy in a loop) ---
     for s in otbr-ingress-deny-src otbr-ingress-deny-src-swap \
              otbr-ingress-allow-dst otbr-ingress-allow-dst-swap; do
         while ipset list -n "$s" >/dev/null 2>&1; do
@@ -73,10 +75,12 @@ teardown() {
 }
 
 setup() {
-    # 先拆一遍保证幂等（防止上次未拆干净导致规则叠加）
+    # Tear down once first for idempotency (so rules cannot stack if the last
+    # teardown did not finish cleanly)
     teardown >/dev/null 2>&1 || true
 
-    # otbr-agent 编了 firewall 支持，启动会去更新这些 ipset，必须先建好
+    # otbr-agent is built with firewall support and updates these ipsets on startup,
+    # so they must exist first
     ipset create -exist otbr-ingress-deny-src       hash:net family inet6
     ipset create -exist otbr-ingress-deny-src-swap  hash:net family inet6
     ipset create -exist otbr-ingress-allow-dst      hash:net family inet6
@@ -103,11 +107,11 @@ setup() {
 
     if [ "${NAT64}" = "1" ]; then
         log "nat64 enabled (backbone=${BACKBONE_IF})"
-        # 标记 Thread 侧入向流量
+        # Mark inbound traffic from the Thread side
         iptables -t mangle -A PREROUTING -i "${THREAD_IF}" -j MARK --set-mark "${FW_MARK}"
-        # 对标记流量做 MASQUERADE
+        # MASQUERADE the marked traffic
         iptables -t nat -A POSTROUTING -m mark --mark "${FW_MARK}" -j MASQUERADE
-        # NAT64 forward 链
+        # NAT64 forward chain
         iptables -N "${NAT64_CHAIN}" 2>/dev/null || true
         iptables -I FORWARD 1 -j "${NAT64_CHAIN}"
         iptables -A "${NAT64_CHAIN}" -m mark --mark "${FW_MARK}" -o "${BACKBONE_IF}" -j ACCEPT

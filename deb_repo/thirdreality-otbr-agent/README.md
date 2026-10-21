@@ -1,90 +1,129 @@
 # thirdreality-otbr-agent
 
-为 ThirdReality LinuxBox Dev Edition 构建的 **OpenThread Border Router (OTBR)**
-`.deb` 包（arm64 / Debian 12 bookworm）。提供 `otbr-agent`（Thread 边界路由代理）、
-`otbr-web`（Web GUI）、`ot-ctl`，以及配套的 systemd 服务、防火墙/NAT64 规则与
-开机配置。
+An **OpenThread Border Router (OTBR)** `.deb` package (arm64 / Debian 12 bookworm)
+built for the ThirdReality LinuxBox Dev Edition. It provides `otbr-agent` (the Thread
+border router agent), `otbr-web` (the Web GUI) and `ot-ctl`, together with the
+matching systemd services, firewall/NAT64 rules and boot-time configuration.
 
-> 构建过程**参考**了 Home Assistant 的 add-on
-> [`openthread_border_router`](https://github.com/home-assistant/addons/tree/master/openthread_border_router)，
-> 但我们产出的是 `.deb`（跑在宿主 systemd 上），**不是 docker 镜像**——所以 add-on 里
-> s6 的 `run`/`finish`、`enable-check.sh` 等逻辑，被我们改写进了 systemd 的
-> `ExecStartPre/ExecStopPost` drop-in 和维护脚本。
-
----
-
-## 一、版本与上游对应关系（重要）
-
-- 源码：`github.com/openthread/ot-br-posix`，checkout 到
-  commit `ec16e396382b4559e70a2c6fdeecb7d596a5e915`（tag **v2026.07.0**）。
-- **这个 commit 是 add-on 的 `OTBR_BETA_VERSION`，即我们跟的是 beta，不是 stable**
-  （add-on 的 stable 是另一个更早的 commit `624a7d98`）。
-- 因为跟 beta：add-on 里 stable 专用的两个 patch
-  （`0001-rest-SO_REUSEADDR`、`0002-nat64-handle-ipv4-options`）**不打**。
-- Thread 版本 1.4；`OTBR_MDNS=openthread`（内置 mDNS，不再依赖旧版 mDNSResponder）。
-- 升级 OTBR 版本时，`build.sh` 顶部的 `COMMIT=` 和 `DEBIAN/control` 的 `Version:` 一起改。
+> The build is **modelled on** the Home Assistant add-on
+> [`openthread_border_router`](https://github.com/home-assistant/addons/tree/master/openthread_border_router),
+> but what we produce is a `.deb` running under the host's systemd, **not a docker
+> image** -- so the add-on's s6 `run`/`finish` and `enable-check.sh` logic has been
+> rewritten into systemd `ExecStartPre`/`ExecStopPost` drop-ins and maintainer scripts.
 
 ---
 
-## 二、构建
+## 1. Version and upstream correspondence (important)
+
+- Source: `github.com/openthread/ot-br-posix`, checked out at
+  commit `cb4bdae242b22287cded07ae3aa10347c2d16d9b` (tag **v2026.10.0**).
+- **This commit is the add-on's `OTBR_BETA_VERSION`, i.e. we follow the beta, not the
+  stable** (the add-on's stable is a different commit, `fd872ab9`).
+- Thread version 1.4; `OTBR_MDNS=openthread` (built-in mDNS, no longer dependent on
+  the old mDNSResponder).
+- When upgrading the OTBR version, change `COMMIT=` at the top of `build.sh` and
+  `Version:` in `DEBIAN/control` together.
+
+### What changed in v2026.07.0 -> v2026.10.0
+
+- Upstream added an **opt-in in-process nftables firewall backend**
+  (`-DOTBR_NFTABLES`, Linux only) and a pf backend (`-DOTBR_PF`, macOS only). We keep
+  **both OFF** and stay on our own `otbr-firewall.sh` (ipset/ip6tables), so firewall
+  behaviour is unchanged. `build.sh` passes both flags explicitly rather than relying
+  on the upstream defaults.
+- Even with both backends off, the build now **always installs two marker files**,
+  `/usr/share/otbr/{nftables-backend,pf-backend}`, which the legacy firewall scripts
+  read to decide who owns the rules. They contain `0` for us. Both are listed in
+  `STAGED_FILES` so the manifest check stays honest.
+- The frontend gained an npm dependency (`qrcode-generator`) and now also copies
+  `package-lock.json`. Nothing to do here -- `npm install` covers it.
+- `script/bootstrap` now also apt-installs `libnftnl-dev` and `libmnl-dev`
+  unconditionally. Both exist on bookworm (1.2.4-2 / 1.0.4-3); they are only needed
+  when `OTBR_NFTABLES=ON`, so for us they are redundant but harmless.
+- Note: the two stable-only patches an earlier version of this document mentioned
+  (`0001-rest-SO_REUSEADDR`, `0002-nat64-handle-ipv4-options`) **no longer exist
+  upstream** -- the add-on dropped its `patches/` directory entirely and applies no
+  patches to either stage. There is nothing to skip any more.
+
+---
+
+## 2. Building
 
 ```bash
-./build.sh            # 构建 deb
-./build.sh --rebuild  # 删除已 clone 的源码/output 后重建
-./build.sh --clean    # 卸载服务、删除源码/output/staging/deb、清理规则
+./build.sh            # build the deb
+./build.sh --rebuild  # delete the cloned source/output, then rebuild
+./build.sh --clean    # uninstall services, delete source/output/staging/deb, clean up rules
 ```
 
-> `--clean` 的卸载走**包管理优先**：`thirdreality-otbr-agent` 由 dpkg 管理时用
-> `apt-get purge`，只有在没有 dpkg 记录（即旧版 build.sh 用 `ninja install` 直接写进 `/usr`
-> 的遗留）时才手工删那几个路径。并且**只删本包自己的三个脚本**
-> （`hubv3-otbr-agent.sh` / `otbr_database` / `otbr-firewall.sh`），不再 `rm -rf
-> /usr/lib/thirdreality` —— 那个目录里还有 `hubv3-usb-sync.sh`、`post-fix-zigbee2mqtt.sh`、
-> `resetupwifi.sh`、`hubv3-generate-ota-indexes.sh`、`conf/` 等，多数不属于任何 deb
-> （镜像直接放的），删掉连重装包都恢复不了。目录本身也**一律不删**（连 `rmdir` 都不做）：
-> 它是多个包与镜像的共用落脚点，留一个空目录的代价远小于误删。
+> `--clean` uninstalls **package manager first**: when `thirdreality-otbr-agent` is
+> dpkg-managed it uses `apt-get purge`, and only hand-deletes those few paths when
+> there is no dpkg record (i.e. the legacy case where the old `build.sh` had
+> `ninja install` write straight into `/usr`). It also **only removes this package's
+> own three scripts** (`hubv3-otbr-agent.sh` / `otbr_database` /
+> `otbr-firewall.sh`) and no longer does `rm -rf /usr/lib/thirdreality` -- that
+> directory also holds `hubv3-usb-sync.sh`, `post-fix-zigbee2mqtt.sh`,
+> `resetupwifi.sh`, `hubv3-generate-ota-indexes.sh`, `conf/` and more, most of which
+> belong to no deb (they ship in the image), so deleting them cannot even be undone by
+> reinstalling the package. The directory itself is **never removed** (not even an
+> `rmdir`): it is a shared landing spot for several packages and the image, and
+> leaving an empty directory costs far less than deleting it by mistake.
 
-- 依赖前置系统包（见 `DEBIAN/control` 的 `Depends`）：
-  `iptables, ipset, iputils-ping, libprotobuf-lite32, libjsoncpp25, iproute2, bind9`。
-- **内存/OOM**：本设备内存小（~2GiB），编译 OpenThread C++ 峰值高。`build.sh` 通过
-  `source ../build_common.sh` 复用统一的 OOM 守护：编译前按需建临时 swap、临时停无关
-  重内存服务（HA / matter / z2m / mosquitto / music-assistant / **otbr-agent / otbr-web**），
-  结束（含失败/中断）自动 swapoff + 恢复服务。开关：`TR_SKIP_SWAP=1` / `TR_KEEP_SERVICES=1`
-  / `TR_SWAP_TARGET_MIB=N`。
-- **打包内容从 `staging/` 收集，不碰构建机的 `/usr`**：`ninja install` 以
-  `DESTDIR=staging/` 落地（`CMAKE_INSTALL_PREFIX=/usr`，所以路径是 `staging/usr/...`），
-  Step 6 再按显式清单从 `staging/` 拷进 `output/`。以前是直接 install 进构建机真实的 `/usr`
-  再从根文件系统 `cp` 回来（那份 `cp` 清单当年是照着 openthread 项目的安装过程观察出来的），
-  带来三个问题，现已消除：构建会给运行中的网关换二进制且这些文件绕过 dpkg；deb 装过一次后
-  `cp` 出来的 unit 可能是上一版 deb 留下的而非本次编译产物；上游改安装布局时硬编码清单不会
-  跟着变、静默漏文件。现在还有双向校验：清单里的文件在 `staging/` 里缺失就**中止构建**，
-  `staging/` 里出现清单外的可执行文件或 unit 就**打印告警**提示清单需要更新。
-- cmake 关键参数（`build.sh` Step 5）：`CMAKE_INSTALL_PREFIX=/usr`、`OTBR_DBUS=OFF`、
-  `OTBR_MDNS=openthread`、`OTBR_WEB=ON`、`OTBR_NAT64=ON`（CIDR `192.168.255.0/24`）、
-  `OT_THREAD_VERSION=1.4`、`OT_RCP_RESTORATION_MAX_COUNT=2`（对齐 add-on beta，掉链更稳）。
-- `script/bootstrap` 只 apt 装编译/运行依赖，**不做系统配置**；其中会顺带装 `dbus`、
-  `rsyslog`、gmock/gtest —— 我们 `DBUS=OFF` 用不到 dbus，属冗余但无害。
+- Required system packages (see `Depends` in `DEBIAN/control`):
+  `iptables, ipset, iputils-ping, libprotobuf-lite32, libjsoncpp25, iproute2, python3`.
+  `python3` is the interpreter for `otbr_database`; it only uses the standard library,
+  so the system python3 is enough and hacore's `/srv/homeassistant` is not required.
+- **Memory/OOM**: this device has little RAM (~2GiB) and compiling OpenThread's C++
+  peaks high. `build.sh` reuses the shared OOM guard via
+  `source ../build_common.sh`: it provisions temporary swap as needed before
+  compiling and temporarily stops unrelated memory-heavy services (HA / matter / z2m /
+  mosquitto / music-assistant / **otbr-agent / otbr-web**), then automatically
+  swapoffs and restores the services on exit (including on failure or interrupt).
+  Toggles: `TR_SKIP_SWAP=1` / `TR_KEEP_SERVICES=1` / `TR_SWAP_TARGET_MIB=N`.
+- **Packaged content is collected from `staging/`, never from the build host's
+  `/usr`**: `ninja install` lands via `DESTDIR=staging/`
+  (`CMAKE_INSTALL_PREFIX=/usr`, so the paths are `staging/usr/...`), and Step 6 copies
+  from `staging/` into `output/` against an explicit manifest. It used to install into
+  the build host's real `/usr` and copy back out of the root filesystem (that `cp`
+  list was originally observed from the openthread project's install), which caused
+  three problems, now eliminated: the build swapped binaries under a running gateway
+  and those files bypassed dpkg; once the deb had been installed, a copied unit could
+  be a leftover from the previous deb rather than this build's output; and when
+  upstream changed the install layout the hardcoded list did not follow, silently
+  dropping files. There is now a two-way check as well: a manifest file missing from
+  `staging/` **aborts the build**, and an executable or unit in `staging/` that is not
+  in the manifest **prints a warning** that the manifest needs updating.
+- Key cmake arguments (`build.sh` Step 5): `CMAKE_INSTALL_PREFIX=/usr`,
+  `OTBR_DBUS=OFF`, `OTBR_MDNS=openthread`, `OTBR_WEB=ON`, `OTBR_NAT64=ON`
+  (CIDR `192.168.255.0/24`), `OT_THREAD_VERSION=1.4`,
+  `OT_RCP_RESTORATION_MAX_COUNT=2` (matching the add-on beta, more robust against
+  dropped links), `OTBR_NFTABLES=OFF`, `OTBR_PF=OFF`.
+- `script/bootstrap` only apt-installs build/runtime dependencies and **makes no
+  system configuration changes**; it incidentally installs `dbus`, `rsyslog` and
+  gmock/gtest -- we use `DBUS=OFF` so dbus is unused, redundant but harmless.
 
-### bookworm vs trixie 的 libjsoncpp
+### libjsoncpp on bookworm vs trixie
 
-add-on 基于 Debian 13 trixie（`libjsoncpp26`/`libncurses6`），**我们目标是 Debian 12
-bookworm，用的是 `libjsoncpp25`**（系统实际为 1.9.5-4）。所以 `Depends` 写 `libjsoncpp25`
-是对的，不要照抄 add-on 改成 26。
+The add-on is based on Debian 13 trixie (`libjsoncpp26`/`libncurses6`), but **we
+target Debian 12 bookworm and use `libjsoncpp25`** (1.9.5-4 on this system). So
+`Depends` naming `libjsoncpp25` is correct -- do not copy the add-on and change it
+to 26.
 
-### 用 dpkg 安装时的依赖
+### Dependencies when installing with dpkg
 
-`dpkg -i otbr-agent_*.deb` **不会自动解析 Depends**（包名仍是 `thirdreality-otbr-agent`，
-只是产出文件名用短名 `otbr-agent_<版本>.deb`）。若提示缺 `libjsoncpp25` 等，安装后补一句：
-`apt-get -f install`。
+`dpkg -i otbr-agent_*.deb` **does not resolve Depends automatically** (the package
+name is still `thirdreality-otbr-agent`; only the output file name uses the short
+form `otbr-agent_<version>.deb`). If it reports `libjsoncpp25` or similar missing,
+follow up with `apt-get -f install`.
 
 ---
 
-## 三、服务拓扑：hubv3-otbr-agent 是总闸
+## 3. Service topology: hubv3-otbr-agent is the master switch
 
-只有 **`hubv3-otbr-agent.service`** 被 `enable`（`WantedBy=multi-user.target`）。
-其余两个服务不独立 enable，全部由总闸拉起：
+Only **`hubv3-otbr-agent.service`** is `enable`d (`WantedBy=multi-user.target`). The
+other two services are not enabled on their own and are pulled in by the master:
 
 ```
-hubv3-otbr-agent.service (oneshot, 总闸, 唯一 enable)
+hubv3-otbr-agent.service (oneshot, master switch, the only enabled unit)
         │ Wants + After
         ▼
 otbr-agent.service  ──ExecStartPre→ otbr-firewall.sh setup
@@ -93,107 +132,151 @@ otbr-agent.service  ──ExecStartPre→ otbr-firewall.sh setup
 otbr-web.service     After + BindsTo = otbr-agent.service
 ```
 
-- `systemctl enable --now hubv3-otbr-agent` → 拉起 agent（建防火墙）→ 带起 web。
-- **`systemctl disable --now hubv3-otbr-agent` → 整套 Thread 全关**
-  （`PartOf` 连带停 agent → 触发 teardown 拆防火墙；`BindsTo` 连带停 web；开机也不再启动）。
-  这是给**没有 Thread 芯片 / 不想用 Thread** 的设备用的"一键关闭"。
-- `hubv3-otbr-agent.sh`（oneshot 内容）：做 GPIO 初始化 + `supervisor thread enabled`；
-  agent 已由 systemd 依赖拉起，脚本里的 `systemctl start otbr-agent` 只是兜底 no-op。
+- `systemctl enable --now hubv3-otbr-agent` -> starts the agent (building the
+  firewall) -> brings up web.
+- **`systemctl disable --now hubv3-otbr-agent` -> turns the whole Thread stack off**
+  (`PartOf` stops the agent, triggering the firewall teardown; `BindsTo` stops web;
+  and it no longer starts at boot). This is the "one-switch off" for devices with
+  **no Thread chip / that do not want Thread**.
+- `hubv3-otbr-agent.sh` (the oneshot body): does GPIO initialisation plus
+  `supervisor thread enabled`; the agent has already been pulled in by the systemd
+  dependency, so the `systemctl start otbr-agent` in the script is just a fallback
+  no-op.
 
 ---
 
-## 四、防火墙 / NAT64
+## 4. Firewall / NAT64
 
-上游 `otbr-agent.service` 是"裸"的（只有 `ExecStart`），**不自带任何防火墙操作**。
-规则的建/拆全部由我们的脚本负责，且**成对**执行，避免旧版"只建不拆"导致重启/升级后
-规则累积：
+The upstream `otbr-agent.service` is "bare" (only `ExecStart`) and **ships no
+firewall handling at all**. Building and tearing down the rules is entirely our
+script's job, and it happens **in pairs** so that rules cannot accumulate across
+restarts/upgrades the way the old "build but never tear down" version did:
 
-- 脚本：`/usr/lib/thirdreality/otbr-firewall.sh {setup|teardown}`
-  （逻辑对齐 add-on 的 s6 `run`/`finish`）。
-- 挂点：`otbr-agent.service` drop-in
-  `ExecStartPre=…setup` / `ExecStopPost=…teardown`。
-- `setup` 幂等：先 `teardown` 再重建，防叠加。
-- 内容：ipset `otbr-ingress-{deny-src,allow-dst}(-swap)`（inet6）、ip6tables 链
-  `OTBR_FORWARD_INGRESS/EGRESS`、NAT64 的 mangle 打标（`0x1001`）+ nat MASQUERADE +
-  `OTBR_FORWARD_NAT64` 链。
-- 开关在 `/etc/default/otbr-agent`：`OTBR_FIREWALL`、`OTBR_NAT64`（**默认都开 =1**）。
+- Script: `/usr/lib/thirdreality/otbr-firewall.sh {setup|teardown}`
+  (logic mirroring the add-on's s6 `run`/`finish`).
+- Hook points: the `otbr-agent.service` drop-in,
+  `ExecStartPre=…setup` / `ExecStopPost=…teardown`.
+- `setup` is idempotent: it tears down first, then rebuilds, to prevent stacking.
+- Contents: ipsets `otbr-ingress-{deny-src,allow-dst}(-swap)` (inet6), ip6tables
+  chains `OTBR_FORWARD_INGRESS/EGRESS`, and for NAT64 the mangle mark (`0x1001`) plus
+  nat MASQUERADE plus the `OTBR_FORWARD_NAT64` chain.
+- Toggles live in `/etc/default/otbr-agent`: `OTBR_FIREWALL`, `OTBR_NAT64`
+  (**both default to 1**).
+- Since v2026.10.0 upstream can own these rules in-process instead
+  (`-DOTBR_NFTABLES=ON`) and writes `/usr/share/otbr/nftables-backend` to say so.
+  We build with it **OFF** (the marker contains `0`), so our script remains the
+  owner. If that flag is ever turned on, the script's rules must be revisited so the
+  two do not both install a filter.
 
 ---
 
-## 五、配置文件与网口
+## 5. Config files and network interfaces
 
 - `/etc/default/otbr-agent`
-  - `OTBR_AGENT_OPTS`：`-I wpan0 -B wlan0 -d 5 --rest-listen-address 0.0.0.0
+  - `OTBR_AGENT_OPTS`: `-I wpan0 -B wlan0 -d 5 --rest-listen-address 0.0.0.0
     --rest-listen-port 8081 spinel+hdlc+uart:///dev/ttyAML6?uart-baudrate=115200 trel://wlan0`
-  - `OTBR_THREAD_IF=wpan0`、`OTBR_BACKBONE_IF=wlan0`、`OTBR_FIREWALL=1`、`OTBR_NAT64=1`
-  - **网口说明**：`-I wpan0` 是 Thread 侧虚拟网口；`-B <backbone>` 是**上行/局域网口**
-    （Backbone Router 用它把 Thread 接入现有 IPv6 LAN、组播转发、TREL）。本设备只有
-    wifi，所以 backbone = **wlan0**。改网口时 `OTBR_AGENT_OPTS` 的 `-I/-B/trel://`
-    与 `OTBR_THREAD_IF/OTBR_BACKBONE_IF` 要一致。
-- `/etc/default/otbr-web`：`OTBR_WEB_OPTS="-I wpan0 -p 8080 -a 0.0.0.0"`
-  —— Web GUI 端口 **8080**（避开 80）；REST API 在 **8081**（otbr-agent 提供）。
-- 开机系统配置由 `DEBIAN/postinst` 写入：`sysctl`（IPv6 转发、`wlan0` accept_ra、
-  `optmem_max`）、`/etc/iproute2/rt_tables` 追加 `88 openthread`、`modprobe`
-  `ip6table_filter/ip6_tables/xt_set`。
+  - `OTBR_THREAD_IF=wpan0`, `OTBR_BACKBONE_IF=wlan0`, `OTBR_FIREWALL=1`, `OTBR_NAT64=1`
+  - **About the interfaces**: `-I wpan0` is the Thread-side virtual interface;
+    `-B <backbone>` is the **uplink/LAN interface** (the Backbone Router uses it to
+    join Thread to the existing IPv6 LAN, for multicast forwarding and TREL). This
+    device only has wifi, so backbone = **wlan0**. When changing interfaces, keep
+    `-I`/`-B`/`trel://` in `OTBR_AGENT_OPTS` consistent with
+    `OTBR_THREAD_IF`/`OTBR_BACKBONE_IF`.
+- `/etc/default/otbr-web`: `OTBR_WEB_OPTS="-I wpan0 -p 8080 -a 0.0.0.0"` -- the Web
+  GUI is on port **8080** (avoiding 80); the REST API is on **8081** (served by
+  otbr-agent).
+- Boot-time system configuration is written by `DEBIAN/postinst`: `sysctl` (IPv6
+  forwarding, `wlan0` accept_ra, `optmem_max`), appending `88 openthread` to
+  `/etc/iproute2/rt_tables`, and `modprobe` of
+  `ip6table_filter`/`ip6_tables`/`xt_set`.
 
 ---
 
-## 六、安装 / 升级 / 卸载行为
+## 6. Install / upgrade / uninstall behaviour
 
-- **preinst**：先停总闸 hubv3（连带停 agent→teardown、web），再兜底停 web/agent；
-  清理旧版 mDNSResponder 遗留文件（`mdnsd`、`libdns_sd`、`libnss_mdns`、旧 init.d 等）。
-- **postinst（configure）**：写 sysctl/rt_tables/modprobe → `disable` 旧版可能遗留的
-  `otbr-agent/otbr-web` 独立自启 → 只 `enable` 总闸 hubv3 → 启动 hubv3；随后轮询
-  `http://localhost:8081/node`，就绪后调用 `otbr_database` 把 Thread 信息写入 HA 配置
-  （若 HA 在跑会先停 HA 再写、写完再起）。
-  - **备份/恢复流程**：若检测到 `/mnt/R3Backup` 有 `.enable-restore` 且存在
-    `setting_*.tar.gz`，则跳过自动配置（`SKIP_AUTO_CONFIG=true`），交给恢复流程。
-- **prerm（remove/purge）**：停总闸+服务、兜底 `otbr-firewall.sh teardown`、删 drop-in、
-  删 `rt_tables`/`sysctl` 项、删 `/var/lib/thread`。
-- **升级路径**：dpkg 升级时 `prerm upgrade` 不匹配 remove/purge，所以
-  **`/var/lib/thread`（Thread 网络凭据）在升级时会保留**；防火墙的清理靠 preinst 停服务
-  触发 `ExecStopPost` 完成，天然干净，无需在 prerm 里为 upgrade 单独拆。
-
----
-
-## 七、注意事项 / 已知坑（务必看）
-
-1. **`Requires=dbus.socket` 已被 drop-in 清除**：上游生成的 unit 模板写死了对 dbus 的
-   硬依赖，但我们 `-DOTBR_DBUS=OFF`。`otbr-agent.service.d/firewall.conf` 用空 `Requires=`
-   重置它，避免没装 dbus 的设备起不来。（bootstrap 会装 dbus，但那只是构建机行为。）
-2. **升级残留**：旧版 postinst 曾 `enable otbr-agent/otbr-web`。新模型只 enable 总闸，
-   故 postinst 会先 `disable` 这两个，清掉旧的 `WantedBy` 符号链接，否则它们会绕过总闸
-   自启。
-3. **真机才验证得了防火墙**：`otbr-firewall.sh setup` 会真正写 ip6tables/ipset/NAT64，
-   且需要 `wpan0` 存在。在无 Thread 芯片的机器上只能验证 `teardown`（安全 no-op）。
-   上设备后建议实测：
-   - `systemctl enable --now hubv3-otbr-agent` → `ip6tables -L OTBR_FORWARD_INGRESS`
-     有规则、`ipset list -n` 有 `otbr-ingress-*`；
-   - 反复 `restart otbr-agent`，确认规则**不累积**；
-   - `systemctl disable --now hubv3-otbr-agent` → 链和 ipset 被清空、agent/web 都停。
-4. **子模块**：`build.sh` 用 `git submodule update --init`（非 `--recursive`），当前版本
-   可正常编译；若将来上游拆分出需递归的子模块，编译报缺文件时改成 `--recursive`。
-5. **串口**：`spinel+hdlc+uart:///dev/ttyAML6@115200` 是本硬件的 RCP 串口，换硬件需改。
-6. **隐患（待修，暂不处理）**：`build.sh` 用 `current_dir=$(pwd)` 取工作目录，所以
-   `output/`、`staging/`、`ot-br-posix/` 三个路径都跟着**调用者当前所在目录**走，而不是脚本
-   所在目录。因此必须 `cd` 到本包目录再 `./build.sh`；若从别处 `bash /path/to/build.sh`，
-   源码会 clone 到当时的工作目录、staging 也建在那里。同仓库的
-   `thirdreality-matter2mqtt/build.sh` 已改用
-   `$(cd "$(dirname "$(readlink -f "$0")")" && pwd)` 规避，本包待统一。
+- **preinst**: stop the hubv3 master switch first (which stops the agent -> teardown,
+  and web), then stop web/agent individually as a fallback; clean up leftovers from
+  the old mDNSResponder setup (`mdnsd`, `libdns_sd`, `libnss_mdns`, old init.d, ...).
+- **postinst (configure)**: write sysctl/rt_tables/modprobe -> `disable` any
+  standalone autostart of `otbr-agent`/`otbr-web` left over from older versions ->
+  `enable` only the hubv3 master -> start hubv3; then poll
+  `http://localhost:8081/node` and, once ready, call `otbr_database` to write the
+  Thread information into the HA config (stopping HA first and restarting it
+  afterwards if HA is running).
+  - `otbr_database` creates the active dataset when there is none
+    (`dataset init new` -> `dataset commit active` -> `ifconfig up` ->
+    `thread start`). If it fails, postinst prints a `[WARN]` instead of swallowing
+    the error: without it Thread stays `disabled` with no dataset.
+  - **Backup/restore flow**: if `/mnt/R3Backup` is found to have `.enable-restore`
+    and `setting_*.tar.gz` exists, auto-configuration is skipped
+    (`SKIP_AUTO_CONFIG=true`) and left to the restore flow.
+- **prerm (remove/purge)**: stop the master and services, fall back to
+  `otbr-firewall.sh teardown`, remove the drop-ins, remove the `rt_tables`/`sysctl`
+  entries, and delete `/var/lib/thread`.
+- **Upgrade path**: on a dpkg upgrade, `prerm upgrade` does not match remove/purge, so
+  **`/var/lib/thread` (the Thread network credentials) is preserved across
+  upgrades**; firewall cleanup happens because preinst stops the services, which
+  triggers `ExecStopPost`, so it is naturally clean and needs no separate upgrade
+  handling in prerm.
 
 ---
 
-## 八、文件清单
+## 7. Notes and known pitfalls (please read)
 
-| 路径 | 说明 |
-|------|------|
-| `build.sh` | 编译打包脚本（clone→bootstrap→cmake→`DESTDIR=staging/ ninja install`→收集→dpkg-deb） |
-| `staging/` | `ninja install` 的落地目录（gitignore）。打包内容只从这里收集 |
-| `openthread-core-ha-config-posix.h` | OpenThread 编译期配置头（首次构建自动下载） |
-| `DEBIAN/{preinst,postinst,prerm,control}` | 维护脚本与包元信息 |
-| `prebuild/otbr-firewall.sh` | 防火墙/NAT64 建拆脚本（setup/teardown） |
-| `prebuild/otbr-agent` | `/etc/default/otbr-agent`：agent 参数 + 防火墙开关 + 网口 |
-| `prebuild/otbr-web` | `/etc/default/otbr-web`：web GUI 参数 |
-| `prebuild/hubv3-otbr-agent.{service,sh}` | 总闸 oneshot（GPIO 初始化 + 拉起 agent） |
-| `prebuild/otbr-agent-init.sh` | GPIO 初始化脚本（备用） |
-| `prebuild/otbr_database` | 把 Thread 信息写入 HA 配置的工具 |
+1. **`Requires=dbus.socket` is cleared by a drop-in**: the unit template generated
+   upstream hardcodes a hard dependency on dbus, but we build with `-DOTBR_DBUS=OFF`.
+   `otbr-agent.service.d/firewall.conf` resets it with an empty `Requires=` so that
+   devices without dbus can still start. (bootstrap does install dbus, but that is
+   build-host behaviour only.)
+2. **Upgrade leftovers**: the old postinst used to `enable otbr-agent/otbr-web`. The
+   new model enables only the master, so postinst `disable`s those two first to clear
+   the stale `WantedBy` symlinks; otherwise they would start at boot bypassing the
+   master switch.
+3. **`otbr_database` must not hardcode HA's interpreter**: its shebang is
+   `#!/usr/bin/env python3`. It used to be `#!/srv/homeassistant/bin/python3`, which
+   meant that on a machine where hacore was not installed the interpreter did not
+   exist, the script failed with "cannot execute: required file not found", the
+   dataset was never created, and Thread came up `disabled` on first boot. The script
+   uses the standard library only and runs under both the system python3 (3.11) and
+   HA's (3.14).
+4. **The firewall can only really be verified on hardware**:
+   `otbr-firewall.sh setup` genuinely writes ip6tables/ipset/NAT64 and needs `wpan0`
+   to exist. On a machine with no Thread chip only `teardown` can be verified (a safe
+   no-op). Once on the device, the suggested checks are:
+   - `systemctl enable --now hubv3-otbr-agent` -> `ip6tables -L OTBR_FORWARD_INGRESS`
+     has rules and `ipset list -n` shows `otbr-ingress-*`;
+   - `restart otbr-agent` repeatedly and confirm the rules **do not accumulate**;
+   - `systemctl disable --now hubv3-otbr-agent` -> the chains and ipsets are cleared
+     and both agent and web stop.
+5. **Submodules**: `build.sh` uses `git submodule update --init` (not `--recursive`),
+   which compiles fine for the current version; if upstream later splits out a
+   submodule that needs recursion, switch to `--recursive` when the build reports
+   missing files.
+6. **Serial port**: `spinel+hdlc+uart:///dev/ttyAML6@115200` is this hardware's RCP
+   serial port and must change with the hardware.
+7. **Latent issue (known, not addressed yet)**: `build.sh` takes its working
+   directory from `current_dir=$(pwd)`, so `output/`, `staging/` and `ot-br-posix/`
+   all follow **the caller's current directory** rather than the script's location.
+   You must therefore `cd` into this package's directory before running
+   `./build.sh`; running `bash /path/to/build.sh` from elsewhere clones the source
+   into whatever the working directory was and creates staging there too. The
+   `thirdreality-matter2mqtt/build.sh` in the same repo already avoids this with
+   `$(cd "$(dirname "$(readlink -f "$0")")" && pwd)`; this package should be brought
+   in line.
+
+---
+
+## 8. File list
+
+| Path | Description |
+|------|-------------|
+| `build.sh` | Build/packaging script (clone -> bootstrap -> cmake -> `DESTDIR=staging/ ninja install` -> collect -> dpkg-deb) |
+| `staging/` | Landing directory for `ninja install` (gitignored). Packaged content is collected only from here |
+| `openthread-core-ha-config-posix.h` | OpenThread compile-time config header (downloaded automatically on first build) |
+| `DEBIAN/{preinst,postinst,prerm,control}` | Maintainer scripts and package metadata |
+| `prebuild/otbr-firewall.sh` | Firewall/NAT64 build and teardown script (setup/teardown) |
+| `prebuild/otbr-agent` | `/etc/default/otbr-agent`: agent options + firewall toggles + interfaces |
+| `prebuild/otbr-web` | `/etc/default/otbr-web`: web GUI options |
+| `prebuild/hubv3-otbr-agent.{service,sh}` | The master-switch oneshot (GPIO init + starting the agent) |
+| `prebuild/otbr-agent-init.sh` | GPIO initialisation script (spare) |
+| `prebuild/otbr_database` | Tool that writes the Thread information into the HA config |
