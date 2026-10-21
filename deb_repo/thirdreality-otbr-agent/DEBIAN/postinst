@@ -14,11 +14,11 @@ ipforward_enable() {
 }
 
 rt_tables_install() {
-    # 去重后添加
+    # Remove duplicates, then append
     sed -i.bak '/88[[:space:]]\+openthread/d' /etc/iproute2/rt_tables
     echo "88 openthread" >> /etc/iproute2/rt_tables
 
-    # optmem_max（只添加一次）
+    # optmem_max (append only once)
     if ! grep -q "optmem_max" /etc/sysctl.conf 2>/dev/null; then
         echo "" >> /etc/sysctl.conf
         echo "# OpenThread configuration" >> /etc/sysctl.conf
@@ -36,7 +36,12 @@ add_open_thread_entry_to_config() {
         response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/node 2>/dev/null || echo "0")
         if [ "$response" = "200" ] || [ "$response" = "204" ]; then
             echo "Thread API available (HTTP ${response})"
-            /usr/lib/thirdreality/otbr_database || true
+            # Not fatal (installing a package should not abort over this), but it must
+            # be surfaced: a failure here means there is no active dataset, so Thread
+            # stays disabled. This used to be swallowed by `|| true`.
+            if ! /usr/lib/thirdreality/otbr_database; then
+                echo "[WARN] otbr_database failed; Thread may stay disabled without an active dataset."
+            fi
             return 0
         fi
         echo "Thread API not ready (HTTP ${response}), waiting... (${attempt}/${max_attempts})"
@@ -51,33 +56,36 @@ if [ "$1" = "configure" ]; then
 
     mkdir -p /var/lib/thread
 
-    # --- sysctl & 路由表 ---
+    # --- sysctl & routing table ---
     accept_ra_enable
     ipforward_enable
     rt_tables_install
 
-    # --- 内核模块 ---
+    # --- Kernel modules ---
     modprobe ip6table_filter || true
     modprobe ip6_tables      || true
     modprobe xt_set          || true
 
-    # --- 脚本权限 ---
+    # --- Script permissions ---
     chmod +x /usr/lib/thirdreality/hubv3-otbr-agent.sh || true
     chmod +x /usr/lib/thirdreality/otbr_database       || true
     chmod +x /usr/lib/thirdreality/otbr-firewall.sh    || true
 
     # --- systemd ---
-    # 防火墙由 otbr-agent.service 的 ExecStartPre/ExecStopPost 成对建/拆，这里不再单独起。
-    # 只 enable 总闸 hubv3-otbr-agent：它 Wants=otbr-agent（进而 Wants=otbr-web），
-    # 所以 otbr-agent/otbr-web 不单独 enable，由总闸拉起。没 Thread 芯片/不想用的设备
-    # 只需 disable hubv3-otbr-agent 即整套关闭。
+    # The firewall is built and torn down in pairs by otbr-agent.service's
+    # ExecStartPre/ExecStopPost, so it is no longer started separately here.
+    # Only enable the hubv3-otbr-agent master switch: it Wants=otbr-agent (which in
+    # turn Wants=otbr-web), so otbr-agent/otbr-web are not enabled on their own and
+    # are pulled in by the master. Devices with no Thread chip, or that do not want
+    # Thread, only need to disable hubv3-otbr-agent to turn the whole stack off.
     systemctl daemon-reload
-    # 清掉旧版可能遗留的独立自启（旧 postinst 曾 enable otbr-agent/otbr-web），
-    # 新模型下它们只由总闸 hubv3 拉起，不应独立 enable。
+    # Clear any standalone autostart left over from older versions (the old postinst
+    # used to enable otbr-agent/otbr-web); under the new model they are only pulled
+    # in by the hubv3 master and should not be enabled independently.
     systemctl disable otbr-agent.service otbr-web.service 2>/dev/null || true
     systemctl enable hubv3-otbr-agent.service || true
 
-    # 检查是否有备份恢复流程，有则跳过自动启动
+    # Skip auto-start when a backup restore flow is in progress
     SKIP_AUTO_CONFIG=false
     if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
         BACKUP_FILES=$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)
@@ -88,14 +96,15 @@ if [ "$1" = "configure" ]; then
     fi
 
     if [ "$SKIP_AUTO_CONFIG" = "false" ]; then
-        # 起总闸即拉起 otbr-agent（ExecStartPre 建防火墙）并带起 otbr-web
+        # Starting the master switch pulls in otbr-agent (whose ExecStartPre builds
+        # the firewall) and brings up otbr-web with it
         systemctl start hubv3-otbr-agent.service || true
 
         if [ -e "/usr/local/bin/supervisor" ]; then
             /usr/local/bin/supervisor thread enabled || true
         fi
 
-        # 写入 HA 配置
+        # Write the HA config
         if systemctl is-active --quiet home-assistant.service; then
             echo "Stopping home-assistant.service..."
             systemctl stop home-assistant.service

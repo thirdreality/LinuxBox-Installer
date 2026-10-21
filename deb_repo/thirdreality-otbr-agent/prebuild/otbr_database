@@ -1,5 +1,8 @@
-#!/srv/homeassistant/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Standard library only: do not hardcode /srv/homeassistant/bin/python3. On machines
+# without hacore that interpreter does not exist, the script fails outright with
+# "cannot execute: required file not found", and the dataset is then never created.
 
 import asyncio
 import json
@@ -178,16 +181,16 @@ async def update_thread_core_config(self, border_agent_id) -> int:
     try:
         file_path = "/var/lib/homeassistant/homeassistant/.storage/core.config_entries"
         
-        # 检查文件是否存在
+        # Check whether the file exists
         if not os.path.exists(file_path):
             print("core.config_entries file does not exist, ignoring...")
-            return 0  # 忽略
+            return 0  # ignored
         else:
-            # 读取现有文件
+            # Read the existing file
             with open(file_path, 'r') as file:
                 config_data = json.load(file)
         
-        # 检查是否已存在otbr域
+        # Check whether the otbr domain already exists
         otbr_exists = False
         thread_exists = False
         
@@ -199,7 +202,7 @@ async def update_thread_core_config(self, border_agent_id) -> int:
         
         print("Checking core.config_entries:", otbr_exists, thread_exists)
 
-        # 如果不存在otbr域，添加它
+        # Add the otbr domain if it does not exist
         if not otbr_exists:
             otbr_entry = {
                 "created_at": datetime.utcnow().isoformat() + "+00:00",
@@ -223,7 +226,7 @@ async def update_thread_core_config(self, border_agent_id) -> int:
             }
             config_data["data"]["entries"].append(otbr_entry)
         
-        # 如果不存在thread域，添加它
+        # Add the thread domain if it does not exist
         if not thread_exists:
             thread_entry = {
                 "created_at": datetime.utcnow().isoformat() + "+00:00",
@@ -253,21 +256,21 @@ async def update_thread_core_config(self, border_agent_id) -> int:
             }
             config_data["data"]["entries"].append(thread_entry)
         
-        # 写入文件
+        # Write the file
         with open(file_path, 'w') as file:
             json.dump(config_data, file, indent=2)
         
-        return 0  # 成功
+        return 0  # success
     except Exception as e:
         print(f"Failed to update thread core config: {e}")
-        return -1  # 失败
+        return -1  # failure
 
 async def update_thread_database(self, border_agent_id, extended_address, active_dataset) -> int:
     """/var/lib/homeassistant/homeassistant/.storage/thread.datasets"""
     try:
         file_path = "/var/lib/homeassistant/homeassistant/.storage/thread.datasets"
         
-        # 检查文件是否存在且包含preferred_border_agent_id
+        # Check whether the file exists and already contains preferred_border_agent_id
         if os.path.exists(file_path):
             with open(file_path, 'r') as file:
                 try:
@@ -281,10 +284,10 @@ async def update_thread_database(self, border_agent_id, extended_address, active
                     # File exists but is not valid JSON, will be replaced
                     pass
         
-        # 创建新的UUID用于dataset ID
+        # Create a new UUID for the dataset ID
         dataset_id = str(uuid.uuid4()).replace("-", "")[:25]
         
-        # 创建新的数据结构
+        # Build the new data structure
         thread_data = {
             "version": 1,
             "minor_version": 4,
@@ -304,14 +307,14 @@ async def update_thread_database(self, border_agent_id, extended_address, active
             }
         }
         
-        # 写入文件
+        # Write the file
         with open(file_path, 'w') as file:
             json.dump(thread_data, file, indent=2)
         
-        return 0  # 成功
+        return 0  # success
     except Exception as e:
         print(f"Failed to update thread database: {e}")
-        return -1  # 失败
+        return -1  # failure
 
 async def main():
     print("Initializing OTBR with command-line interface")
@@ -358,6 +361,6 @@ async def main():
         print(f"An error occurred: {e}")
 
 
-# 运行异步main函数
+# Run the async main function
 asyncio.run(main())
 
