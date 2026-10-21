@@ -63,14 +63,14 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2026.8.3"
+export HOME_ASSISTANT_VERSION="2026.10.2"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20260729.7" 
+export FRONTEND_VERSION="20260930.4" 
 
 # HA 2026.7 起，matter 集成的客户端库从 python-matter-server 改名拆分为
 # matter-python-client + matter-ble-proxy（见 core matter/manifest.json）。
-export MATTER_PYTHON_CLIENT_VERSION="1.3.0"
+export MATTER_PYTHON_CLIENT_VERSION="1.4.0"
 export MATTER_BLE_PROXY_VERSION="0.7.1"
 
 # 服务端已从 python-matter-server[server] 迁移到 Node.js 的 matter.js server
@@ -176,11 +176,18 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${python3_dir}/bin/python3 -m venv .
     source ${home_assistant_path}/bin/activate
 
+    # 用环境变量而不是 `pip3 config set`：后者写的是全局 ~/.config/pip/pip.conf，
+    # 会污染整机配置并影响这个构建之外的一切。
+    # 默认源不再用清华系（tuna/ustc/sjtu 共用清华的包存储，当前对 pip 返回 403；
+    # curl 却是 200，所以只能用 pip 自身探测）。可用 PIP_INDEX_URL 覆盖。
+    PIP_MIRROR="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
+    PIP_MIRROR_HOST=$(echo "${PIP_MIRROR}" | awk -F[/:] '{print $4}')
+    print_info "pip index: ${PIP_MIRROR}"
     if [ $UV_INSTALLED == false ]; then
-        pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
-        pip3 config set install.trusted-host pypi.tuna.tsinghua.edu.cn
+        export PIP_INDEX_URL="${PIP_MIRROR}"
+        export PIP_TRUSTED_HOST="${PIP_MIRROR_HOST}"
     else
-        export UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+        export UV_INDEX_URL="${PIP_MIRROR}"
     fi
 
     ${UV_INSTALLED_COMMAND} --upgrade pip wheel
@@ -197,28 +204,28 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
         PyTurboJPEG==1.8.3 \
         go2rtc-client==0.4.0 \
         ha-ffmpeg==3.2.2 \
-        hassil==3.8.0 \
-        home-assistant-intents==2026.6.24 \
-        mutagen==1.47.0 \
+        hassil==3.12.1 \
+        home-assistant-intents==2026.10.6 \
+        mutagen==1.48.1 \
         pymicro-vad==1.0.1 \
         pyspeex-noise==1.0.2
 
-    ${UV_INSTALLED_COMMAND} music-assistant-client==1.3.6
+    ${UV_INSTALLED_COMMAND} music-assistant-client==1.5.1
 
     #以下是一个强制换行符号
     ${UV_INSTALLED_COMMAND} universal-silabs-flasher==1.1.0 ha-silabs-firmware-client==0.3.0 psutil-home-assistant==0.0.1
     
     # homeassistant.components.matter
     # HA 2026.7 起 matter 集成客户端库改名拆分（服务端改用 Node.js matter.js server）。
-    ${UV_INSTALLED_COMMAND} matter-python-client==1.3.0 matter-ble-proxy==0.7.1
+    ${UV_INSTALLED_COMMAND} matter-python-client==1.4.0 matter-ble-proxy==0.7.1
 
     # homeassistant.components.thread
-    ${UV_INSTALLED_COMMAND} python-otbr-api==2.10.0 pyroute2==0.9.6
+    ${UV_INSTALLED_COMMAND} python-otbr-api==3.0.0 pyroute2==0.9.6
 
     # homeassistant.components.zha
     # 注意：zha 2.0.0 依赖 zigpy 2.0.0，而 zigpy 2.0.0 要求 serialx>=1.4.0（旧的 0.6.2 会冲突）。
     # zha-quirks 是 zha 运行期必需（旧流程靠首启预热补装），这里显式固定以便一次装全。
-    ${UV_INSTALLED_COMMAND} zha==2.1.0 zha-quirks==2.2.0 serialx==1.8.2
+    ${UV_INSTALLED_COMMAND} zha==2.3.1 zha-quirks==2.3.0 serialx==1.11.0
 
     # zigpy-cli 默认会拉入 zigpy-zboss，而 zigpy-zboss (2.0.3) 约束 zigpy<2，与 HA 2026.7
     # 的 zha 2.0.0（需 zigpy 2.0）冲突，会导致 zha 装不上。我们不支持 zboss 无线，
@@ -230,12 +237,12 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     #以下是从首次启动日志中获取的，关键字：[homeassistant.util.package]
     ${UV_INSTALLED_COMMAND} ha-ffmpeg==3.2.2
     ${UV_INSTALLED_COMMAND} aiousbwatcher==1.1.2
-    ${UV_INSTALLED_COMMAND} async-upnp-client==0.46.2
+    ${UV_INSTALLED_COMMAND} async-upnp-client==0.48.2
     ${UV_INSTALLED_COMMAND} aiodhcpwatcher==1.2.7
     ${UV_INSTALLED_COMMAND} aiodiscover==3.3.2
-    ${UV_INSTALLED_COMMAND} hassil==3.8.0
-    ${UV_INSTALLED_COMMAND} home-assistant-intents==2026.6.24
-    ${UV_INSTALLED_COMMAND} mutagen==1.47.0
+    ${UV_INSTALLED_COMMAND} hassil==3.12.1
+    ${UV_INSTALLED_COMMAND} home-assistant-intents==2026.10.6
+    ${UV_INSTALLED_COMMAND} mutagen==1.48.1
     ${UV_INSTALLED_COMMAND} bleak==3.0.2
     ${UV_INSTALLED_COMMAND} bluetooth-adapters==2.4.0
     ${UV_INSTALLED_COMMAND} bluetooth-auto-recovery==1.6.4
