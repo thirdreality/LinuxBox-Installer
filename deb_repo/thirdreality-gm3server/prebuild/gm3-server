@@ -1,0 +1,30 @@
+# Default settings for gm3-server. Sourced by systemd.
+#
+# The cloud URL and TURN settings are fixed at build time by -DLS_ENV
+# (local|staging|online); LOCAL_CLOUD_URL below only overrides them for
+# debugging. Everything else is runtime configuration.
+
+# Sub-device MQTT broker. Spelled out on purpose: with -DLS_ENV=local the
+# compiled-in default is a developer's machine (10.1.0.14), which must never
+# reach a shipped device.
+LOCAL_MQTT_HOST=127.0.0.1
+LOCAL_MQTT_PORT=1883
+LOCAL_MQTT_USER=thirdreality
+LOCAL_MQTT_PASS=thirdreality
+# zigbee2mqtt base_topic. Note: the bridge currently hardcodes "zigbee2mqtt/",
+# so changing this alone does not work yet.
+LOCAL_MQTT_BASE=zigbee2mqtt
+
+# Local httpd. 0.0.0.0 today, so the console is reachable from the LAN.
+LOCAL_HTTP_PORT=8090
+
+# Device identity
+LOCAL_SUB_TYPE=HUBV3
+LOCAL_STORE_DIR=/var/lib/gm3-server
+# LOCAL_FACTORY_ID: unset means /etc/machine-id is used.
+#LOCAL_FACTORY_ID=
+
+# Debug-only overrides
+#LOCAL_CLOUD_URL=http://127.0.0.1:8443
+#LOCAL_TURN_HOST=
+#LOCAL_TURN_SECRET=

@@ -1,0 +1,9 @@
+#!/bin/bash
+# Before install/upgrade: stop the running service so the binary can be replaced.
+
+if systemctl is-active --quiet gm3-server 2>/dev/null; then
+    echo "Stopping gm3-server..."
+    systemctl stop gm3-server || true
+fi
+
+exit 0

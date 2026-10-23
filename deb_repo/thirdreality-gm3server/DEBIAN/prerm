@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    echo "Stopping GM3Server..."
+    systemctl stop    gm3-server 2>/dev/null || true
+    systemctl disable gm3-server 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+
+    # /var/lib/gm3-server is deliberately kept, even on purge: it holds the
+    # device private key and the cloud-issued deviceId. Without it the device
+    # re-registers and the cloud rejects it as already-bound, which cannot be
+    # undone by reinstalling. Remove it by hand if you really mean to.
+    if [ -d /var/lib/gm3-server ]; then
+        echo "Keeping /var/lib/gm3-server (device identity). Remove it by hand to force re-registration."
+    fi
+
+    echo "Remove GM3Server success."
+fi
+
+exit 0

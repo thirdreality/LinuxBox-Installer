@@ -12,6 +12,11 @@ deb_repo/thirdreality-python3*/Python-*/
 # Cloned upstream source for otbr-agent build
 deb_repo/thirdreality-otbr-agent/ot-br-posix/
 
+# GM project checkout (GM3Server/GM2Server/CloudServer sources + internal design
+# docs). It lives here only so the gm3server deb can be built against it; only
+# the compiled binary ships, never the source.
+/tmp/
+
 # Temporary swapfile created by build_common.sh (shared low-memory OOM guard)
 deb_repo/*/.build-swap
 

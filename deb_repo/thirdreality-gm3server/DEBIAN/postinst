@@ -1,0 +1,47 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "configure" ]; then
+
+    # 0700: the directory holds the device private key and cloud identity.
+    mkdir -p /var/lib/gm3-server
+    chmod 700 /var/lib/gm3-server
+
+    chmod +x /usr/bin/gm3-server || true
+
+    systemctl daemon-reload
+    systemctl enable gm3-server.service || true
+
+    # Skip auto-start when a backup restore is pending, matching the other packages.
+    SKIP_AUTO_START=false
+    if [ -d "/mnt/R3Backup" ] && [ ! -f "/mnt/R3Backup/.enable-backup" ] && [ -f "/mnt/R3Backup/.enable-restore" ]; then
+        if [ "$(ls /mnt/R3Backup/setting_*.tar.gz 2>/dev/null | wc -l)" -gt 0 ]; then
+            echo "[INFO] Found backup files, skipping auto-start."
+            SKIP_AUTO_START=true
+        fi
+    fi
+
+    if [ "$SKIP_AUTO_START" = "false" ]; then
+        systemctl start gm3-server.service || true
+
+        # The broker is a Wants, not a Requires, so say so rather than failing:
+        # without it GM3Server starts but lists no sub-devices.
+        if ! systemctl is-active --quiet mosquitto 2>/dev/null; then
+            echo "[WARN] mosquitto is not running; GM3Server will start but will have no sub-devices."
+        fi
+
+        if systemctl is-active --quiet gm3-server 2>/dev/null; then
+            port=$(awk -F= '/^LOCAL_HTTP_PORT=/{print $2}' /etc/default/gm3-server 2>/dev/null)
+            echo "GM3Server is running. Console: http://<device-ip>:${port:-8090}/"
+        else
+            echo "[WARN] gm3-server failed to start; check: journalctl -u gm3-server -n 50"
+        fi
+    fi
+
+    echo "Install GM3Server success."
+
+elif [ "$1" = "fix-dependency" ]; then
+    echo "fix-dependency"
+fi
+
+exit 0

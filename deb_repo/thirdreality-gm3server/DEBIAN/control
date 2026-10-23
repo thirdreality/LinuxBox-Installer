@@ -1,0 +1,16 @@
+Package: thirdreality-gm3server
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: arm64
+Depends: libssl3, libmosquitto1
+Maintainer: guoping.liu <guoping.liu@3reality.com>
+Description: GM3Server - device-side server for ThirdReality LinuxBox (hubv3).
+ Pure C server that takes over the server-side role Home Assistant used to play:
+ an embedded CivetWeb httpd on :8090 serving the LocalWeb console plus a device
+ REST API, a sub-device model fed over MQTT, 14-day history in SQLite, and a
+ cloud long-connection with Ed25519 self-attestation. Talks to the local
+ mosquitto broker only; the Zigbee and Matter protocol stacks stay in
+ zigbee2mqtt and matter2mqtt. The frontend is compiled into the binary, so
+ there are no web assets on disk. This build has the libdatachannel P2P path
+ left out: LAN access and the cloud long-connection work, WebRTC does not.

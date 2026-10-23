@@ -1,0 +1,25 @@
+[Unit]
+Description=ThirdReality GM3Server (device-side server)
+Documentation=https://github.com/thirdreality/LinuxBox-Installer
+After=network-online.target mosquitto.service
+Wants=network-online.target
+# Wants, not Requires: without the broker GM3Server has no sub-devices, but its
+# LAN console on :8090 is the way in to diagnose that, so it must still start.
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/gm3-server
+ExecStart=/usr/bin/gm3-server
+Restart=on-failure
+RestartSec=5
+
+# Device identity: private key + cloud deviceId land here. Deleting this
+# directory makes the device re-register, which the cloud rejects as
+# already-bound, so prerm must never remove it.
+StateDirectory=gm3-server
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/gm3-server
+
+[Install]
+WantedBy=multi-user.target
