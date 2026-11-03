@@ -52,6 +52,19 @@ HA 首次启动时会通过 `homeassistant.util.package` 按已加载的集成**
 > build.sh 里那一大段"从首次启动日志中获取的"写死包列表，就是历史上手工做完上述预热后，
 > 把 HA 首启会下载的包固化进脚本的结果，用于减少每次预热需要补装的量。
 
+> 默认配置的 `logger` 级别会过滤掉 `[homeassistant.util.package]` 这类 INFO 日志，
+> 所以判断预热装了什么，最可靠的是对比预热前后的 `pip list --format=freeze`。
+
+### 依赖版本遵守 HA 的 package_constraints.txt
+
+HA 运行时装包都带 `--constraint package_constraints.txt`。build.sh 装完 `homeassistant`
+后导出 `PIP_CONSTRAINT`/`UV_CONSTRAINT`，此后的安装同样受约束；每次构建（含第 3 步的
+纯重打包）还会在打补丁前把版本与约束不符的已装包装回约束版本，已对齐时不联网、不改动。
+
+否则未固定版本的安装会拉进更新的包，首启时 HA 再按约束降级，进程里已加载的 C 扩展与
+磁盘上的新版本不一致。2026.10.4 预热时实测：`cffi` 2.1.1 被降到 2.0.0 后，
+`xiaomi_ble` 因 `pycryptodomex` 报 `Version mismatch` 加载失败，重启一次才恢复。
+
 ---
 
 ## 二、版本同步工具 `sync_all_versions.py`

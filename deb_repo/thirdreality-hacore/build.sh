@@ -63,10 +63,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # 全局定义版本号
-export HOME_ASSISTANT_VERSION="2026.10.2"
+export HOME_ASSISTANT_VERSION="2026.10.4"
 
 #home-assistant-frontend==20250509.0
-export FRONTEND_VERSION="20260930.4" 
+export FRONTEND_VERSION="20260930.5" 
 
 # HA 2026.7 起，matter 集成的客户端库从 python-matter-server 改名拆分为
 # matter-python-client + matter-ble-proxy（见 core matter/manifest.json）。
@@ -75,7 +75,7 @@ export MATTER_BLE_PROXY_VERSION="0.7.1"
 
 # 服务端已从 python-matter-server[server] 迁移到 Node.js 的 matter.js server
 # (npm 包名 matter-server)。系统（armbian/buildroot）自带 Node.js 24.x。
-export MATTER_SERVER_NPM_VERSION="1.4.0"
+export MATTER_SERVER_NPM_VERSION="1.5.5"
 # 允许离线/局域网环境覆盖 npm 源（例如内网 registry 或 npmmirror 镜像）。
 # 只有外网不通、但内网有镜像时设置它即可；已安装则完全不联网。
 NPM_REGISTRY_URL="${NPM_REGISTRY_URL:-}"
@@ -192,7 +192,15 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
 
     ${UV_INSTALLED_COMMAND} --upgrade pip wheel
 
-    ${UV_INSTALLED_COMMAND} homeassistant=="$HOME_ASSISTANT_VERSION" 
+    ${UV_INSTALLED_COMMAND} homeassistant=="$HOME_ASSISTANT_VERSION"
+
+    # 之后的安装一律遵守 HA 自带的 package_constraints.txt（HA 运行时装包也带 --constraint）。
+    # 否则未固定版本的安装会拉进更新的包（如 cffi 2.1.1），首启时 HA 再按约束降级，
+    # 进程里已加载的 C 扩展与新文件版本不一致，依赖它的集成要重启一次才能加载。
+    HA_CONSTRAINTS="${home_assistant_path}/lib64/python3.14/site-packages/homeassistant/package_constraints.txt"
+    export PIP_CONSTRAINT="${HA_CONSTRAINTS}"
+    export UV_CONSTRAINT="${HA_CONSTRAINTS}"
+
     ${UV_INSTALLED_COMMAND} home-assistant-frontend=="$FRONTEND_VERSION"
 
     # Check it https://github.com/home-assistant/core/blob/master/script/hassfest/docker/Dockerfile
@@ -249,32 +257,46 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     ${UV_INSTALLED_COMMAND} pymicro-vad==1.0.1
     ${UV_INSTALLED_COMMAND} pyspeex-noise==1.0.2
     ${UV_INSTALLED_COMMAND} PyTurboJPEG==1.8.3
-    ${UV_INSTALLED_COMMAND} radios==0.3.2
+    ${UV_INSTALLED_COMMAND} radios==1.0.0
     ${UV_INSTALLED_COMMAND} universal-silabs-flasher==1.1.0
     ${UV_INSTALLED_COMMAND} ha-silabs-firmware-client==0.3.0
     ${UV_INSTALLED_COMMAND} gTTS==2.5.4
-    ${UV_INSTALLED_COMMAND} av==17.0.1
+    ${UV_INSTALLED_COMMAND} av==19.0.0
     ${UV_INSTALLED_COMMAND} go2rtc-client==0.4.0
     ${UV_INSTALLED_COMMAND} PyNaCl==1.6.2
-    ${UV_INSTALLED_COMMAND} aioesphomeapi==45.3.1
-    ${UV_INSTALLED_COMMAND} esphome-dashboard-api==1.3.0
-    ${UV_INSTALLED_COMMAND} bleak-esphome==3.9.7
+    ${UV_INSTALLED_COMMAND} aioesphomeapi==46.6.0
+    ${UV_INSTALLED_COMMAND} esphome-dashboard-api==1.4.0
+    ${UV_INSTALLED_COMMAND} bleak-esphome==4.0.0
     ${UV_INSTALLED_COMMAND} paho-mqtt==2.1.0
     ${UV_INSTALLED_COMMAND} aioruuvigateway==0.1.0
-    ${UV_INSTALLED_COMMAND} aioshelly==13.26.2
+    ${UV_INSTALLED_COMMAND} aioshelly==13.34.1
     ${UV_INSTALLED_COMMAND} ibeacon-ble==1.2.0
     ${UV_INSTALLED_COMMAND} kegtron-ble==1.0.2
-    ${UV_INSTALLED_COMMAND} xiaomi-ble==1.11.0    
+    ${UV_INSTALLED_COMMAND} xiaomi-ble==1.16.1    
     ${UV_INSTALLED_COMMAND} numpy==2.3.2
-    ${UV_INSTALLED_COMMAND} pyotp==2.9.0
+    ${UV_INSTALLED_COMMAND} pyotp==2.10.0
     ${UV_INSTALLED_COMMAND} PyQRCode==1.2.1
     ${UV_INSTALLED_COMMAND} pyatv==0.18.0
-    ${UV_INSTALLED_COMMAND} PySwitchbot==2.2.0
+    ${UV_INSTALLED_COMMAND} PySwitchbot==2.9.0
     ${UV_INSTALLED_COMMAND} cached-ipaddress==1.1.2
-    ${UV_INSTALLED_COMMAND} bluetooth-data-tools==1.29.18
+    ${UV_INSTALLED_COMMAND} bluetooth-data-tools==1.29.24
     ${UV_INSTALLED_COMMAND} dbus-fast==5.0.22
-    ${UV_INSTALLED_COMMAND} habluetooth==6.26.5
+    ${UV_INSTALLED_COMMAND} habluetooth==7.1.2
     ${UV_INSTALLED_COMMAND} file-read-backwards==2.0.0
+
+    # HA 也会处理 after_dependencies 的依赖：matter/otbr/zha/bluetooth 都把 hassio 列为
+    # after_dependency，所以首启时会现装 hassio 的 aiohasupervisor（离线则这些集成全部加载失败）。
+    # conversation（gazetteer-matcher）与 cloud（openai）由 default_config 拉入，同理。
+    ${UV_INSTALLED_COMMAND} aiohasupervisor==0.6.0
+    ${UV_INSTALLED_COMMAND} gazetteer-matcher==1.1.0
+    ${UV_INSTALLED_COMMAND} openai==3.10.0
+
+    # HA 2026.10.4 首启预热实测下载（infrared/radio_frequency 为实体集成，总会加载；
+    # getmac 由 upnp/dlna_dmr 发现局域网路由器时拉入）
+    ${UV_INSTALLED_COMMAND} infrared-protocols==10.1.0
+    ${UV_INSTALLED_COMMAND} rf-protocols==4.3.0
+    ${UV_INSTALLED_COMMAND} getmac==0.9.5
+    ${UV_INSTALLED_COMMAND} pysmlight==0.5.3 bleak-smlight==1.1.0
 
     #cd ${home_assistant_path}/lib64/python3.14/site-packages; python3 -m pip install git+https://github.com/bouffalolab/zigpy-blz/@dev
     cd ${home_assistant_path}/lib64/python3.14/site-packages; ${UV_INSTALLED_COMMAND} git+https://github.com/thirdreality/zigpy-blz/@main
@@ -283,6 +305,43 @@ if [ ! -e "${home_assistant_path}/bin/hass" ]; then
     # 注意：补丁的实际应用已移动到 venv/matter 安装块之后、以幂等方式无条件执行
     # （见下方 tr_apply_patch_idempotent 调用），确保原地升级重装 zha 等包后补丁不丢失。
     deactivate
+fi
+
+# ---------------------------------------------------------------------------
+# 按 HA 的 package_constraints.txt 对齐已安装包的版本（幂等，已对齐时不联网、不改动）。
+# 放在 venv 块之外：venv 已存在的纯重打包路径（含首启预热后的 venv）同样要校验。
+# 必须在打补丁之前：重装包可能覆盖已打补丁的文件。
+# ---------------------------------------------------------------------------
+if [ -e "${home_assistant_path}/bin/hass" ]; then
+    HA_CONSTRAINTS="${home_assistant_path}/lib64/python3.14/site-packages/homeassistant/package_constraints.txt"
+    REALIGN=$("${home_assistant_path}/bin/python3" -I - "${HA_CONSTRAINTS}" <<'EOF'
+import re, sys
+from importlib.metadata import version, PackageNotFoundError
+for line in open(sys.argv[1]):
+    m = re.match(r'^([A-Za-z0-9_.\-]+)(?:\[[^\]]*\])?==([^\s;#]+)', line.strip())
+    if not m:
+        continue
+    try:
+        installed = version(m[1])
+    except PackageNotFoundError:
+        continue
+    if installed != m[2]:
+        print(f"{m[1]}=={m[2]}")
+EOF
+)
+    if [ -n "${REALIGN}" ]; then
+        print_info "Realigning to HA constraints: $(echo ${REALIGN})"
+        PIP_MIRROR="${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
+        "${home_assistant_path}/bin/python3" -m pip install \
+            --index-url "${PIP_MIRROR}" \
+            --trusted-host "$(echo "${PIP_MIRROR}" | awk -F[/:] '{print $4}')" \
+            --constraint "${HA_CONSTRAINTS}" ${REALIGN} || {
+            print_error "Failed to realign packages to HA constraints"
+            exit 1
+        }
+    else
+        print_info "Installed packages already match HA constraints"
+    fi
 fi
 
 # ---------------------------------------------------------------------------
