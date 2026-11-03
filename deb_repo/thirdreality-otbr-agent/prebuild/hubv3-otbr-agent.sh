@@ -47,14 +47,9 @@ fix_wpan_interface() {
 #     fi    
 # fi
 
-gpioset 0 29=0  
-sleep 0.2
-gpioset 0 27=1
-sleep 0.2
-gpioset 0 27=0
-sleep 0.2
-gpioset 0 27=1
-sleep 0.5
+# The RCP GPIO reset lives in otbr-agent-init.sh (otbr-agent's ExecStartPre): this
+# unit is ordered After=otbr-agent, so resetting the radio here would pull it out
+# from under an agent that is already running.
 
 /usr/bin/systemctl start otbr-agent || true
 if [ -e "/usr/local/bin/supervisor" ]; then

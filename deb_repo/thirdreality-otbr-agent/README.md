@@ -59,8 +59,8 @@ matching systemd services, firewall/NAT64 rules and boot-time configuration.
 > dpkg-managed it uses `apt-get purge`, and only hand-deletes those few paths when
 > there is no dpkg record (i.e. the legacy case where the old `build.sh` had
 > `ninja install` write straight into `/usr`). It also **only removes this package's
-> own three scripts** (`hubv3-otbr-agent.sh` / `otbr_database` /
-> `otbr-firewall.sh`) and no longer does `rm -rf /usr/lib/thirdreality` -- that
+> own four scripts** (`hubv3-otbr-agent.sh` / `otbr-agent-init.sh` /
+> `otbr_database` / `otbr-firewall.sh`) and no longer does `rm -rf /usr/lib/thirdreality` -- that
 > directory also holds `hubv3-usb-sync.sh`, `post-fix-zigbee2mqtt.sh`,
 > `resetupwifi.sh`, `hubv3-generate-ota-indexes.sh`, `conf/` and more, most of which
 > belong to no deb (they ship in the image), so deleting them cannot even be undone by
@@ -126,7 +126,8 @@ other two services are not enabled on their own and are pulled in by the master:
 hubv3-otbr-agent.service (oneshot, master switch, the only enabled unit)
         │ Wants + After
         ▼
-otbr-agent.service  ──ExecStartPre→ otbr-firewall.sh setup
+otbr-agent.service  ──ExecStartPre→ otbr-agent-init.sh (RCP GPIO reset)
+        │                     ExecStartPre→ otbr-firewall.sh setup
         │ Wants               ExecStopPost→ otbr-firewall.sh teardown
         ▼                     PartOf = hubv3-otbr-agent.service
 otbr-web.service     After + BindsTo = otbr-agent.service
@@ -138,10 +139,14 @@ otbr-web.service     After + BindsTo = otbr-agent.service
   (`PartOf` stops the agent, triggering the firewall teardown; `BindsTo` stops web;
   and it no longer starts at boot). This is the "one-switch off" for devices with
   **no Thread chip / that do not want Thread**.
-- `hubv3-otbr-agent.sh` (the oneshot body): does GPIO initialisation plus
-  `supervisor thread enabled`; the agent has already been pulled in by the systemd
-  dependency, so the `systemctl start otbr-agent` in the script is just a fallback
-  no-op.
+- `otbr-agent-init.sh` (otbr-agent's first `ExecStartPre`): resets the RCP over
+  GPIO 0/29 and 0/27 before the agent opens `/dev/ttyAML6`, on every start and
+  restart. It must not run after the agent is up: an unexpected RCP reset makes the
+  agent abort.
+- `hubv3-otbr-agent.sh` (the oneshot body): runs `supervisor thread enabled`; it is
+  ordered `After=otbr-agent`, so it does no GPIO work, and the agent has already
+  been pulled in by the systemd dependency, so the `systemctl start otbr-agent` in
+  the script is just a fallback no-op.
 
 ---
 
@@ -277,6 +282,6 @@ restarts/upgrades the way the old "build but never tear down" version did:
 | `prebuild/otbr-firewall.sh` | Firewall/NAT64 build and teardown script (setup/teardown) |
 | `prebuild/otbr-agent` | `/etc/default/otbr-agent`: agent options + firewall toggles + interfaces |
 | `prebuild/otbr-web` | `/etc/default/otbr-web`: web GUI options |
-| `prebuild/hubv3-otbr-agent.{service,sh}` | The master-switch oneshot (GPIO init + starting the agent) |
-| `prebuild/otbr-agent-init.sh` | GPIO initialisation script (spare) |
+| `prebuild/hubv3-otbr-agent.{service,sh}` | The master-switch oneshot (`supervisor thread enabled` + starting the agent) |
+| `prebuild/otbr-agent-init.sh` | RCP GPIO reset, otbr-agent's first `ExecStartPre` |
 | `prebuild/otbr_database` | Tool that writes the Thread information into the HA config |

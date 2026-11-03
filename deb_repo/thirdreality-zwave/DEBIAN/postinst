@@ -7,7 +7,7 @@ set -e
 DEFAULT_APT_CACHE="/var/cache/apt/archives"
 
 fix_manual_install() {
-
+    :
 }
 
 case "$1" in
@@ -30,9 +30,9 @@ case "$1" in
 
     fix-dependency)
         # Manual dependency fixing
-        if [ -e "/usr/lib/thirdreality/post-fix-zwave.sh"" ]; then
-            chmod +x /usr/lib/thirdreality/post-fix-zwave.sh"
-            /usr/lib/thirdreality/post-fix-zwave.sh" > /dev/null || true
+        if [ -e "/usr/lib/thirdreality/post-fix-zwave.sh" ]; then
+            chmod +x /usr/lib/thirdreality/post-fix-zwave.sh
+            /usr/lib/thirdreality/post-fix-zwave.sh > /dev/null || true
         fi
     ;;
 

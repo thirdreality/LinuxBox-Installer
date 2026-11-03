@@ -68,6 +68,7 @@ if [ "$1" = "configure" ]; then
 
     # --- Script permissions ---
     chmod +x /usr/lib/thirdreality/hubv3-otbr-agent.sh || true
+    chmod +x /usr/lib/thirdreality/otbr-agent-init.sh  || true
     chmod +x /usr/lib/thirdreality/otbr_database       || true
     chmod +x /usr/lib/thirdreality/otbr-firewall.sh    || true
 

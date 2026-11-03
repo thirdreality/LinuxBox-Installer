@@ -8,7 +8,7 @@
 #   - Build flow: setup -> bootstrap + cmake-build
 #   - mDNS: external mDNSResponder -> built in, no mdnsd/libdns_sd/libnss_mdns
 #   - Dropped: otbr-nat44 (NAT64 is built in), mdns init.d, dbus conf, nss_mdns.conf
-#   - Dropped: otbr-agent-init.sh (ExecStartPre now runs the firewall script)
+#   - otbr-agent-init.sh (RCP GPIO reset) is the first ExecStartPre, before the firewall script
 #   - CMAKE_INSTALL_PREFIX=/usr -> same paths as the old layout
 #   - Web GUI: WEB_GUI=1/OTBR_WEB=ON, frontend built with the system nodejs/npm
 #     (bootstrap only apt-installs npm when it is missing; this host uses NodeSource v24)
@@ -133,13 +133,14 @@ otbr_uninstall() {
         # Upstream firewall-backend markers (v2026.10.0 and later)
         rm -f /usr/share/otbr/nftables-backend /usr/share/otbr/pf-backend
         rmdir /usr/share/otbr 2>/dev/null || true
-        # Only remove this package's own three scripts. NEVER `rm -rf
+        # Only remove this package's own four scripts. NEVER `rm -rf
         # /usr/lib/thirdreality`: that directory also holds hubv3-usb-sync.sh,
         # post-fix-zigbee2mqtt.sh, resetupwifi.sh, hubv3-generate-ota-indexes.sh,
         # conf/, archives_zigbee2mqtt/ and more, most of which belong to no deb
         # (they ship in the image), so deleting them cannot even be undone by
         # reinstalling the package.
         rm -f /usr/lib/thirdreality/hubv3-otbr-agent.sh \
+              /usr/lib/thirdreality/otbr-agent-init.sh \
               /usr/lib/thirdreality/otbr_database \
               /usr/lib/thirdreality/otbr-firewall.sh
         # The directory itself is always kept (not even an rmdir): it is a shared
@@ -393,8 +394,10 @@ done < <(find "${staging_dir}" -type f \( -perm -u+x -o -name '*.service' \) 2>/
 # --- ThirdReality-specific scripts ---
 cp "${current_dir}/prebuild/hubv3-otbr-agent.sh"      "${output_dir}/usr/lib/thirdreality/"
 cp "${current_dir}/prebuild/hubv3-otbr-agent.service"  "${output_dir}/usr/lib/systemd/system/"
+cp "${current_dir}/prebuild/otbr-agent-init.sh"        "${output_dir}/usr/lib/thirdreality/"
 cp "${current_dir}/prebuild/otbr_database"             "${output_dir}/usr/lib/thirdreality/"
 chmod +x "${output_dir}/usr/lib/thirdreality/hubv3-otbr-agent.sh"
+chmod +x "${output_dir}/usr/lib/thirdreality/otbr-agent-init.sh"
 chmod +x "${output_dir}/usr/lib/thirdreality/otbr_database"
 
 # --- Firewall script (builds/tears down ip6tables/ipset/NAT64, replacing the old
@@ -417,6 +420,8 @@ PartOf=hubv3-otbr-agent.service
 Wants=otbr-web.service
 
 [Service]
+# Reset the RCP over GPIO before the agent opens the UART, on every start/restart
+ExecStartPre=/usr/lib/thirdreality/otbr-agent-init.sh
 # Build and tear down the firewall in pairs on every start, so rules cannot accumulate
 ExecStartPre=/usr/lib/thirdreality/otbr-firewall.sh setup
 ExecStopPost=/usr/lib/thirdreality/otbr-firewall.sh teardown
