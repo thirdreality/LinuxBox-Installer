@@ -2,7 +2,7 @@
 # =============================================================================
 # build.sh - ThirdReality OTBR Agent deb packaging script
 #
-# Target version: ot-br-posix v2026.10.0 (commit cb4bdae2, Thread 1.4, OTBR_MDNS=openthread)
+# Target version: ot-br-posix v2026.11.0 (commit 76fb21d6, Thread 1.4, OTBR_MDNS=openthread)
 #
 # Main differences from the pre-v2026.07.0 layout:
 #   - Build flow: setup -> bootstrap + cmake-build
@@ -24,6 +24,17 @@
 #     STAGED_FILES below so the manifest check stays honest.
 #   - Frontend gained an npm dependency (qrcode-generator) and now also copies
 #     package-lock.json; nothing to do here, npm install covers it.
+#
+# v2026.10.0 -> v2026.11.0 notes:
+#   - No CMake option, bootstrap or service template changes; the build flags
+#     below are unchanged.
+#   - --rest-listen-address also accepts a unix socket path (starting with '/');
+#     our 0.0.0.0 keeps working as before.
+#   - The HA app's beta is still on v2026.10.0, so this release is ahead of it.
+#     The app's config header has since added
+#     OPENTHREAD_CONFIG_MULTICAST_DNS_AUTO_ENABLE_ON_INFRA_IF 0 because its
+#     startup script enables mDNS by hand; we have no such script, so our header
+#     deliberately does not follow.
 # =============================================================================
 
 set -euo pipefail
@@ -47,12 +58,11 @@ output_dir="${current_dir}/output"
 # manifest can be checked against what was actually installed.
 staging_dir="${current_dir}/staging"
 
-COMMIT="cb4bdae242b22287cded07ae3aa10347c2d16d9b"   # tag v2026.10.0
+COMMIT="76fb21d666a41050b43f8eaabc30e71d9d75d9fd"   # tag v2026.11.0
 SRC_DIR="${current_dir}/ot-br-posix"
 # npm mirror (the web gui frontend's npm install uses a local mirror; the default
 # registry times out from here)
 NPM_REGISTRY="${NPM_REGISTRY:-https://mirrors.tencent.com/npm/}"
-HA_ADDONS_RAW="https://raw.githubusercontent.com/home-assistant/addons/master/openthread_border_router"
 
 REBUILD=false
 CLEAN=false
@@ -185,13 +195,17 @@ mkdir -p "${output_dir}/etc/systemd/system/otbr-agent.service.d"
 mkdir -p "${output_dir}/etc/systemd/system/otbr-web.service.d"
 
 # =============================================================================
-# Step 2: download the HA config file
+# Step 2: check the HA config file
 # =============================================================================
-print_step "Step 2: download HA attachment"
+print_step "Step 2: check HA config header"
 
+# Kept in this repo on purpose, never downloaded: the HA app's current header sets
+# OPENTHREAD_CONFIG_MULTICAST_DNS_AUTO_ENABLE_ON_INFRA_IF 0, which would leave mDNS
+# off for us (see the v2026.11.0 notes at the top).
 HA_CONFIG_H="${current_dir}/openthread-core-ha-config-posix.h"
 if [[ ! -f "${HA_CONFIG_H}" ]]; then
-    wget -q -O "${HA_CONFIG_H}" "${HA_ADDONS_RAW}/openthread-core-ha-config-posix.h"
+    print_error "missing ${HA_CONFIG_H} (restore it from git)"
+    exit 1
 fi
 
 # =============================================================================

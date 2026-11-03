@@ -5,8 +5,8 @@ built for the ThirdReality LinuxBox Dev Edition. It provides `otbr-agent` (the T
 border router agent), `otbr-web` (the Web GUI) and `ot-ctl`, together with the
 matching systemd services, firewall/NAT64 rules and boot-time configuration.
 
-> The build is **modelled on** the Home Assistant add-on
-> [`openthread_border_router`](https://github.com/home-assistant/addons/tree/master/openthread_border_router),
+> The build is **modelled on** the Home Assistant app
+> [`openthread_border_router`](https://github.com/home-assistant/app-openthread-border-router),
 > but what we produce is a `.deb` running under the host's systemd, **not a docker
 > image** -- so the add-on's s6 `run`/`finish` and `enable-check.sh` logic has been
 > rewritten into systemd `ExecStartPre`/`ExecStopPost` drop-ins and maintainer scripts.
@@ -16,13 +16,31 @@ matching systemd services, firewall/NAT64 rules and boot-time configuration.
 ## 1. Version and upstream correspondence (important)
 
 - Source: `github.com/openthread/ot-br-posix`, checked out at
-  commit `cb4bdae242b22287cded07ae3aa10347c2d16d9b` (tag **v2026.10.0**).
-- **This commit is the add-on's `OTBR_BETA_VERSION`, i.e. we follow the beta, not the
-  stable** (the add-on's stable is a different commit, `fd872ab9`).
+  commit `76fb21d666a41050b43f8eaabc30e71d9d75d9fd` (tag **v2026.11.0**).
+- **We follow the app's beta channel, and this release is one step ahead of it**: as
+  of 2026-11-03 the app's `OTBR_BETA_VERSION` is still v2026.10.0 (`cb4bdae2`) and
+  its stable is v2026.09.0 (`fd872ab9`).
 - Thread version 1.4; `OTBR_MDNS=openthread` (built-in mDNS, no longer dependent on
   the old mDNSResponder).
 - When upgrading the OTBR version, change `COMMIT=` at the top of `build.sh` and
   `Version:` in `DEBIAN/control` together.
+
+### What changed in v2026.10.0 -> v2026.11.0
+
+- **No build changes**: no CMake option, `script/bootstrap` or service template
+  changed upstream, so `build.sh` only moves `COMMIT=`.
+- `--rest-listen-address` also accepts a unix socket path (one starting with `/`).
+  Our `0.0.0.0` in `/etc/default/otbr-agent` keeps working.
+- Notable runtime fixes: mDNS keeps the resolved service when retrying its address
+  lookup, DNS-SD subscribes on the interface of the request, and the REST network
+  diagnostics gain the Enhanced Route TLV (37). The openthread submodule moves from
+  `cb18e0f` to `ecd308b`; none of the macros in our config header changed.
+- **`openthread-core-ha-config-posix.h` deliberately does not follow the app.** The
+  app's header now sets `OPENTHREAD_CONFIG_MULTICAST_DNS_AUTO_ENABLE_ON_INFRA_IF 0`
+  because its startup script sets the mDNS hostname and then enables mDNS by hand.
+  We have no such step, so taking that header would leave mDNS off. For the same
+  reason `build.sh` no longer downloads the header when it is missing; it fails
+  instead (the old add-on URL returns 404 anyway).
 
 ### What changed in v2026.07.0 -> v2026.10.0
 
