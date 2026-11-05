@@ -50,7 +50,7 @@ matter-ble-proxy.service   python venv 的 matter-ble-proxy (bleak/BlueZ) ──
 
 ## 版本
 
-- 分叉基座:`matter-server` **1.5.5-tr.2** / matter.js **0.18.0**(timing 补丁在 0.18.0 上偏移 25 行仍可应用,`ssid` 变量仍在作用域内)。
+- 分叉基座:`matter-server` **1.5.5-tr.3** / matter.js **0.18.0**(timing 补丁在 0.18.0 上偏移 25 行仍可应用,`ssid` 变量仍在作用域内)。
 - deb 版本以 `prebuild/DEBIAN/control` 的 `Version` 字段为准。
 - BLE 代理:`matter-ble-proxy` **0.7.1**。
 
