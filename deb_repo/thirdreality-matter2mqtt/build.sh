@@ -222,6 +222,12 @@ fi
 ble_client_py=$(ls -d ${ble_venv}/lib/python*/site-packages/matter_ble_proxy/client.py 2>/dev/null | head -1 || true)
 if [ -n "$ble_client_py" ] && [ -f "$ble_client_py" ]; then
     tr_apply_patch_idempotent "$ble_client_py" "${current_dir}/prebuild/matter_ble_proxy_mtu.patch" "_acquire_mtu"
+    # Connect retry: the proxy resolves an address to the BLEDevice its scanner cached, but BlueZ drops
+    # its D-Bus object for that device once scanning has been off a while, so bleak fails at once with
+    # "device 'dev_..' not found" and matter.js gives that device no second attempt. On any connect
+    # failure, retry once by plain address (bleak then scans for it), within the same timeout budget.
+    # Seen with a Nanoleaf strip (2026-11-05); independent of the MTU patch, applies in either order.
+    tr_apply_patch_idempotent "$ble_client_py" "${current_dir}/prebuild/matter_ble_proxy_connect_retry.patch" "retrying by address"
 else
     print_error "matter-ble-proxy client.py not found; cannot apply MTU patch, abort"; exit 1
 fi
@@ -237,7 +243,10 @@ fi
 if ! grep -q "_acquire_mtu" "$ble_client_py" 2>/dev/null; then
     print_error "MTU patch NOT present in ${ble_client_py}, abort"; exit 1
 fi
-print_info "BLE proxy verified (venv + MTU patch present)"
+if ! grep -q "retrying by address" "$ble_client_py" 2>/dev/null; then
+    print_error "connect retry patch NOT present in ${ble_client_py}, abort"; exit 1
+fi
+print_info "BLE proxy verified (venv + MTU patch + connect retry patch present)"
 
 # ---------------------------------------------------------------------------
 # [3] Install units on the build host (for local testing) + package the deb.
