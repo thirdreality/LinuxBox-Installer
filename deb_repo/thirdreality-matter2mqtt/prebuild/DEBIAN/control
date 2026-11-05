@@ -1,5 +1,5 @@
 Package: thirdreality-matter2mqtt
-Version: 1.4.0-tr.3
+Version: 1.5.5-tr.2
 Section: utils
 Priority: optional
 Architecture: arm64
@@ -8,7 +8,7 @@ Maintainer: guoping.liu <guoping.liu@3reality.com>
 Description: Matter-to-MQTT gateway (matter.js server fork + native MQTT bridge), no Home Assistant.
  Exposes Matter devices, their state, control, commissioning and firmware updates over MQTT
  in a zigbee2mqtt-style topic layout, including Home Assistant MQTT discovery. Based on the
- ThirdReality matterjs-server fork (matter-server 1.4.0 / matter.js 0.17.9), whose
+ ThirdReality matterjs-server fork (matter-server 1.5.5 / matter.js 0.18.0), whose
  packages/mqtt-bridge is enabled with --mqtt-url; the earlier "official npm package plus
  @matter/mqtt patches" approach is retired. BLE commissioning uses a standalone
  matter-ble-proxy venv (bleak/BlueZ, Python 3.14 from thirdreality-python3), coexisting

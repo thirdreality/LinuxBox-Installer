@@ -56,10 +56,10 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# ThirdReality fork release (matter.js 0.17.9 base + mqtt-bridge). The "0.17.9 commissioning
+# ThirdReality fork release (matter-server 1.5.5 / matter.js 0.18.0 base + mqtt-bridge). The "0.17.9 commissioning
 # regression" suspected earlier was disproved: the root cause was device firmware dropping BLE
 # ~5s after addOrUpdateWiFiNetwork, handled by matterjs_commissioning_timing.patch below.
-export MATTER_SERVER_VERSION="1.4.0-tr.3"
+export MATTER_SERVER_VERSION="1.5.5-tr.2"
 export MATTER_BLE_PROXY_VERSION="0.7.1"
 # Tarball source: local file wins (offline/dev), else GitHub Release download + sha256.
 TARBALL="matter-server-${MATTER_SERVER_VERSION}.tgz"
