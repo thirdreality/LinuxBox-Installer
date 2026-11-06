@@ -211,17 +211,18 @@ if [ ! -x "${ble_venv}/bin/matter-ble-proxy" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# [2c] Patch matter-ble-proxy: acquire the negotiated ATT MTU. bleak's BlueZ backend
-#      leaves mtu_size at the 23 default unless acquired, which makes the proxy report
-#      MTU=23 -> matter.js fragments BTP into 20-byte segments -> the networkCommissioning
-#      read after addOrUpdateWiFiNetwork needs many GATT writes and stalls/drops BLE on
-#      low-MTU peripherals (commissioning then fails: connectNetwork never sent).
-#      Verified: MTU 23->247, that read 5.6s->0.24s, night light commissions.
-#      Idempotent (sentinel=_acquire_mtu) since a venv reinstall overwrites client.py.
+# [2c] Patch matter-ble-proxy. Idempotent (sentinels) since a venv reinstall overwrites the files.
+#      The MTU patch is deliberately NOT applied: BTP keeps the 20-byte default, as upstream does
+#      (see disabled-patches/matter_ble_proxy_mtu/README.md). A venv from an older build may still
+#      carry it, so it is reversed here.
 # ---------------------------------------------------------------------------
 ble_client_py=$(ls -d ${ble_venv}/lib/python*/site-packages/matter_ble_proxy/client.py 2>/dev/null | head -1 || true)
 if [ -n "$ble_client_py" ] && [ -f "$ble_client_py" ]; then
-    tr_apply_patch_idempotent "$ble_client_py" "${current_dir}/prebuild/matter_ble_proxy_mtu.patch" "_acquire_mtu"
+    if grep -q "_acquire_mtu" "$ble_client_py"; then
+        print_info "reversing the disabled MTU patch left in an existing venv"
+        patch -R "$ble_client_py" < "${current_dir}/disabled-patches/matter_ble_proxy_mtu/matter_ble_proxy_mtu.patch" || \
+            { print_error "could not reverse the MTU patch in ${ble_client_py}; recreate the BLE venv, abort"; exit 1; }
+    fi
     # Fresh advertisement: matter.js keeps BLE discoveries for 15 min and, on a new commissioning request,
     # connects at once to a record from an earlier scan: a rotated address that no longer exists, or a
     # device whose BlueZ object is gone ("device 'dev_..' not found"), which spends matter.js's only attempt
@@ -233,19 +234,18 @@ if [ -n "$ble_client_py" ] && [ -f "$ble_client_py" ]; then
     # 2026-11-05). Stop the scan for the connect and resume it afterwards; matter.js keeps scanning until PASE.
     tr_apply_patch_idempotent "$ble_client_py" "${current_dir}/prebuild/matter_ble_proxy_pause_scan.patch" "Pausing scan while connecting"
 else
-    print_error "matter-ble-proxy client.py not found; cannot apply MTU patch, abort"; exit 1
+    print_error "matter-ble-proxy client.py not found; cannot patch the BLE proxy, abort"; exit 1
 fi
 
 # ---------------------------------------------------------------------------
-# [2d] BLE guard assertions (every build). Commissioning needs BOTH the proxy venv AND the
-#      MTU patch; a silent miss here breaks pairing on real hardware, so fail hard rather
-#      than package a broken deb.
+# [2d] BLE guard assertions (every build). A silent miss here breaks pairing on real hardware,
+#      so fail hard rather than package a broken deb.
 # ---------------------------------------------------------------------------
 if [ ! -x "${ble_venv}/bin/matter-ble-proxy" ]; then
     print_error "BLE proxy binary missing: ${ble_venv}/bin/matter-ble-proxy, abort"; exit 1
 fi
-if ! grep -q "_acquire_mtu" "$ble_client_py" 2>/dev/null; then
-    print_error "MTU patch NOT present in ${ble_client_py}, abort"; exit 1
+if grep -q "_acquire_mtu" "$ble_client_py" 2>/dev/null; then
+    print_error "disabled MTU patch still present in ${ble_client_py}, abort"; exit 1
 fi
 if ! grep -q "_FRESH_WAIT_SECONDS" "$(dirname "$ble_client_py")/bleak_backend.py" 2>/dev/null; then
     print_error "fresh advertisement patch NOT present in $(dirname "$ble_client_py")/bleak_backend.py, abort"; exit 1
@@ -253,7 +253,7 @@ fi
 if ! grep -q "Pausing scan while connecting" "$ble_client_py" 2>/dev/null; then
     print_error "pause scan patch NOT present in ${ble_client_py}, abort"; exit 1
 fi
-print_info "BLE proxy verified (venv + MTU, fresh advertisement and pause scan patches present)"
+print_info "BLE proxy verified (venv + fresh advertisement and pause scan patches, no MTU patch)"
 
 # ---------------------------------------------------------------------------
 # [3] Install units on the build host (for local testing) + package the deb.

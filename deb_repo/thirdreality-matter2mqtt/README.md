@@ -149,10 +149,12 @@ configure`。解包会覆盖 `/opt/matter2mqtt` 下约 2.5 万个文件(node_mod
 
 | patch | 目标 | sentinel | 作用 |
 | --- | --- | --- | --- |
-| `matter_ble_proxy_mtu.patch` | `matter_ble_proxy/client.py` | `_acquire_mtu` | 连接后补取协商 ATT MTU。bleak/BlueZ 默认停在 23,导致 BTP 被拆成 20 字节小分片、大读拖垮设备断连。实测 MTU 23→247、关键读 5.6s→0.24s,配对稳定。 |
 | `matter_ble_proxy_fresh_advertisement.patch` | `matter_ble_proxy/bleak_backend.py` | `_FRESH_WAIT_SECONDS` | 只连接最近 3 s 内广播过的地址,否则在当前扫描中最多等 3 s,等不到就报 not found。matter.js 把发现的设备保留 15 分钟,新的配网请求一开始就拿上一轮的记录去连:已轮换作废的地址,或 BlueZ 已删除对象的设备(`device 'dev_..' not found`),白白用掉该设备唯一一次尝试。代理串行处理命令,所以等待必须短。取代 2026-11-05 的 `matter_ble_proxy_connect_retry.patch`(按地址重试会在旧地址上扫到超时、卡住整个代理)。 |
-| `matter_ble_proxy_pause_scan.patch` | `matter_ble_proxy/client.py` | `Pausing scan while connecting` | 连接期间暂停扫描,连接结束(成功或失败)后恢复。发现进行中时,BlueZ 要等当前这一轮发现(约 10 s)结束才发出 LE Create Connection,连接因此空等最长约 10 s,而 bleak 的连接超时也是 10 s(2026-11-05 三次 HCI 抓包)。matter.js 在 PASE 前一直扫描,所以必须恢复。与 MTU 补丁先后顺序均可。 |
+| `matter_ble_proxy_pause_scan.patch` | `matter_ble_proxy/client.py` | `Pausing scan while connecting` | 连接期间暂停扫描,连接结束(成功或失败)后恢复。发现进行中时,BlueZ 要等当前这一轮发现(约 10 s)结束才发出 LE Create Connection,连接因此空等最长约 10 s,而 bleak 的连接超时也是 10 s(2026-11-05 三次 HCI 抓包)。matter.js 在 PASE 前一直扫描,所以必须恢复。|
 | `matterjs_commissioning_timing.patch` | `@matter/protocol` 的 `ControllerCommissioningFlow.js` | `TR-PATCH` | 跳过 `addOrUpdateWiFiNetwork` 后多余的 networks 回读(WiFi 场景 NetworkID==SSID),把时间窗留给 `connectNetwork`。根因是脆弱固件在写网络后 ~5s 停 GATT(曾误判为 0.17.9 回归,已证伪)。 |
+
+> `matter_ble_proxy_mtu.patch`(BTP 大分段)自 2026-11-06 起**停用**,BTP 保持默认 20 字节分段,与上游一致;
+> 补丁文件和原因见 `disabled-patches/matter_ble_proxy_mtu/README.md`。构建时若旧 venv 里还带着它,会被撤掉。
 
 > MQTT channel 相关逻辑已并入分叉的 `packages/mqtt-bridge`,不再以本仓库 patch 形式存在。
 
@@ -181,11 +183,12 @@ prebuild/
   DEBIAN/                    control / preinst / postinst / prerm / postrm
   matter2mqtt.service        matter-server(含 MQTT channel)的 systemd unit
   matter-ble-proxy.service   BLE 代理的 systemd unit
-  matter_ble_proxy_mtu.patch            MTU 修复补丁
   matter_ble_proxy_fresh_advertisement.patch  只连接最近广播过的设备
   matter_ble_proxy_pause_scan.patch     连接期间暂停扫描
   matterjs_commissioning_timing.patch   配网时序补丁
   matter-server-<ver>.tgz(+ .sha256)   分叉发布 tarball(gitignore,不进 git)
+disabled-patches/
+  matter_ble_proxy_mtu/      已停用的 BTP 大分段补丁及停用原因(README.md),build.sh 不应用
 docs/
   build-tarball.sh           仅供参考:早期从 fork 工作树打 tarball 的原型脚本。
                              正式产出流程见上游 matterjs-server 仓库,不在本包构建路径内。
@@ -197,11 +200,11 @@ output/                      构建产物工作目录(gitignore)
 ## 升级 matter-server 分叉时的回归清单
 
 1. 配对:BLE 设备可配上(日志 `Commissioned`)。
-2. MTU:ble-proxy 日志 `negotiated ATT MTU=247`(非 23)。
+2. BTP 分段:matter2mqtt 日志 `BTP segment size=20 bytes`(MTU 补丁已停用,不应是 244)。
 3. MQTT channel:`--help` 含 `mqtt-url`;`mosquitto_sub -t 'matter2mqtt/#'` 有业务簇上报,
    敏感字段命中 0。
 4. 控制:经 MQTT 发 on/off/toggle/moveToLevel,`onOff` 状态随之变化(含无参命令)。
-5. 两个补丁仍成功应用(sentinel 命中或重新打上)。
+5. 所有补丁仍成功应用(sentinel 命中或重新打上),停用的 MTU 补丁不在 venv 里。
 6. 与 hacore 栈的共存行为符合 `preinst`/`postinst` 预期:`/srv/homeassistant`、
    `/srv/matter_server` 仍在,HA / 原生 matter-server 的 enabled 状态未被改动,mosquitto 未被
    误停,两个 unit 各自按对端状态决定是否启动。
