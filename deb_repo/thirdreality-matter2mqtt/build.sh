@@ -228,6 +228,10 @@ if [ -n "$ble_client_py" ] && [ -f "$ble_client_py" ]; then
     # for that device. Connect only to an address that advertised in the last 3 s, else wait up to 3 s for it
     # during the running scan and report not found otherwise. Patches bleak_backend.py, not client.py.
     tr_apply_patch_idempotent "$(dirname "$ble_client_py")/bleak_backend.py" "${current_dir}/prebuild/matter_ble_proxy_fresh_advertisement.patch" "_FRESH_WAIT_SECONDS"
+    # Pause scan: while discovery runs, BlueZ sends LE Create Connection only when its current discovery period
+    # (~10 s) ends, so a connect idled up to ~10 s against bleak's 10 s connect timeout (three HCI captures,
+    # 2026-11-05). Stop the scan for the connect and resume it afterwards; matter.js keeps scanning until PASE.
+    tr_apply_patch_idempotent "$ble_client_py" "${current_dir}/prebuild/matter_ble_proxy_pause_scan.patch" "Pausing scan while connecting"
 else
     print_error "matter-ble-proxy client.py not found; cannot apply MTU patch, abort"; exit 1
 fi
@@ -246,7 +250,10 @@ fi
 if ! grep -q "_FRESH_WAIT_SECONDS" "$(dirname "$ble_client_py")/bleak_backend.py" 2>/dev/null; then
     print_error "fresh advertisement patch NOT present in $(dirname "$ble_client_py")/bleak_backend.py, abort"; exit 1
 fi
-print_info "BLE proxy verified (venv + MTU patch + fresh advertisement patch present)"
+if ! grep -q "Pausing scan while connecting" "$ble_client_py" 2>/dev/null; then
+    print_error "pause scan patch NOT present in ${ble_client_py}, abort"; exit 1
+fi
+print_info "BLE proxy verified (venv + MTU, fresh advertisement and pause scan patches present)"
 
 # ---------------------------------------------------------------------------
 # [3] Install units on the build host (for local testing) + package the deb.

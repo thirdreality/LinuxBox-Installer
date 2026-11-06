@@ -151,6 +151,7 @@ configure`。解包会覆盖 `/opt/matter2mqtt` 下约 2.5 万个文件(node_mod
 | --- | --- | --- | --- |
 | `matter_ble_proxy_mtu.patch` | `matter_ble_proxy/client.py` | `_acquire_mtu` | 连接后补取协商 ATT MTU。bleak/BlueZ 默认停在 23,导致 BTP 被拆成 20 字节小分片、大读拖垮设备断连。实测 MTU 23→247、关键读 5.6s→0.24s,配对稳定。 |
 | `matter_ble_proxy_fresh_advertisement.patch` | `matter_ble_proxy/bleak_backend.py` | `_FRESH_WAIT_SECONDS` | 只连接最近 3 s 内广播过的地址,否则在当前扫描中最多等 3 s,等不到就报 not found。matter.js 把发现的设备保留 15 分钟,新的配网请求一开始就拿上一轮的记录去连:已轮换作废的地址,或 BlueZ 已删除对象的设备(`device 'dev_..' not found`),白白用掉该设备唯一一次尝试。代理串行处理命令,所以等待必须短。取代 2026-11-05 的 `matter_ble_proxy_connect_retry.patch`(按地址重试会在旧地址上扫到超时、卡住整个代理)。 |
+| `matter_ble_proxy_pause_scan.patch` | `matter_ble_proxy/client.py` | `Pausing scan while connecting` | 连接期间暂停扫描,连接结束(成功或失败)后恢复。发现进行中时,BlueZ 要等当前这一轮发现(约 10 s)结束才发出 LE Create Connection,连接因此空等最长约 10 s,而 bleak 的连接超时也是 10 s(2026-11-05 三次 HCI 抓包)。matter.js 在 PASE 前一直扫描,所以必须恢复。与 MTU 补丁先后顺序均可。 |
 | `matterjs_commissioning_timing.patch` | `@matter/protocol` 的 `ControllerCommissioningFlow.js` | `TR-PATCH` | 跳过 `addOrUpdateWiFiNetwork` 后多余的 networks 回读(WiFi 场景 NetworkID==SSID),把时间窗留给 `connectNetwork`。根因是脆弱固件在写网络后 ~5s 停 GATT(曾误判为 0.17.9 回归,已证伪)。 |
 
 > MQTT channel 相关逻辑已并入分叉的 `packages/mqtt-bridge`,不再以本仓库 patch 形式存在。
@@ -182,6 +183,7 @@ prebuild/
   matter-ble-proxy.service   BLE 代理的 systemd unit
   matter_ble_proxy_mtu.patch            MTU 修复补丁
   matter_ble_proxy_fresh_advertisement.patch  只连接最近广播过的设备
+  matter_ble_proxy_pause_scan.patch     连接期间暂停扫描
   matterjs_commissioning_timing.patch   配网时序补丁
   matter-server-<ver>.tgz(+ .sha256)   分叉发布 tarball(gitignore,不进 git)
 docs/

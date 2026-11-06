@@ -1,0 +1,36 @@
+--- a/matter_ble_proxy/client.py	2026-11-06 01:58:20.661973483 +0000
++++ b/matter_ble_proxy/client.py	2026-11-06 01:58:20.833973943 +0000
+@@ -386,6 +386,7 @@
+             }
+             self._spawn_task(self._send_event("device_discovered", event_data))
+ 
++        self._scan_callback = _on_advertisement
+         await self._scan_source.start(_on_advertisement)
+         self._scanning = True
+         await self._send_success(cmd_id)
+@@ -426,6 +427,11 @@
+             )
+ 
+         client = BleakClient(target, disconnected_callback=_on_disconnect)
++        # BlueZ sends LE Create Connection only once its current discovery period (~10 s) ends; pause the scan.
++        paused = self._scanning
++        if paused:
++            _LOGGER.info("Pausing scan while connecting to %s", address)
++            await self._scan_source.stop()
+         try:
+             async with asyncio.timeout(timeout_ms / 1000):
+                 await client.connect()
+@@ -435,6 +441,13 @@
+         except Exception as err:
+             await self._send_error(cmd_id, "connection_failed", f"Failed to connect to {address}: {err}")
+             return
++        finally:
++            if paused and self._scanning:
++                try:
++                    await self._scan_source.start(self._scan_callback)
++                except Exception:
++                    _LOGGER.warning("Resuming the scan after connecting to %s failed", address, exc_info=True)
++                    self._scanning = False
+ 
+         conn = ConnectionState(client, handle)
+         self._connections[handle] = conn
